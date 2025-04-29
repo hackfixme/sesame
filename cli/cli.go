@@ -14,6 +14,8 @@ type CLI struct {
 	kong *kong.Kong
 	kctx *kong.Context
 
+	Serve Serve `kong:"cmd,help='Start the web server.'"`
+
 	Log struct {
 		Level slog.Level `enum:"DEBUG,INFO,WARN,ERROR" default:"INFO" help:"Set the app logging level."`
 	} `embed:"" prefix:"log-"`
