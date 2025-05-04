@@ -2,8 +2,10 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/adrg/xdg"
 	"github.com/mandelsoft/vfs/pkg/osfs"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
@@ -15,6 +17,7 @@ import (
 
 func main() {
 	a, err := app.New("sesame",
+		filepath.Join(xdg.ConfigHome, "sesame", "config.json"),
 		app.WithTimeSource(osTime{}),
 		app.WithEnv(osEnv{}),
 		app.WithFDs(

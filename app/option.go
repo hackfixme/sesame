@@ -14,6 +14,13 @@ import (
 // Option is a function that allows configuring the application.
 type Option func(*App)
 
+// WithConfig sets the configuration object.
+func WithConfig(cfg *models.Config) Option {
+	return func(app *App) {
+		app.ctx.Config = cfg
+	}
+}
+
 // WithContext sets the main context.
 func WithContext(ctx context.Context) Option {
 	return func(app *App) {

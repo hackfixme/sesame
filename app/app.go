@@ -24,11 +24,12 @@ type App struct {
 	args []string
 	// the logging level is set via the CLI, if the app was initialized with the
 	// WithLogger option.
-	logLevel *slog.LevelVar
+	logLevel       *slog.LevelVar
+	configFilePath string
 }
 
 // New initializes a new application.
-func New(name string, opts ...Option) (*App, error) {
+func New(name string, configFilePath string, opts ...Option) (*App, error) {
 	version, err := actx.GetVersion()
 	if err != nil {
 		return nil, err
@@ -42,14 +43,18 @@ func New(name string, opts ...Option) (*App, error) {
 
 		FirewallType: models.FirewallMock,
 	}
-	app := &App{name: name, ctx: defaultCtx}
+	app := &App{
+		name:           name,
+		ctx:            defaultCtx,
+		configFilePath: configFilePath,
+	}
 
 	for _, opt := range opts {
 		opt(app)
 	}
 
 	ver := fmt.Sprintf("%s %s", app.name, app.ctx.Version.String())
-	app.cli, err = cli.New(ver)
+	app.cli, err = cli.New(configFilePath, ver)
 	if err != nil {
 		return nil, err
 	}
@@ -68,6 +73,15 @@ func (app *App) Run(args []string) error {
 		app.logLevel.Set(app.cli.Log.Level)
 		slog.SetLogLoggerLevel(app.cli.Log.Level)
 	}
+
+	if app.ctx.Config == nil || app.ctx.Config.Path() != app.cli.ConfigFile {
+		app.ctx.Config = models.NewConfig(app.ctx.FS, app.configFilePath)
+		if err := app.ctx.Config.Load(); err != nil {
+			return err
+		}
+	}
+
+	app.cli.ApplyConfig(app.ctx.Config)
 
 	if err := app.setupFirewall(); err != nil {
 		return err
@@ -91,7 +105,7 @@ func (app *App) setupFirewall() error {
 
 	var err error
 	app.ctx.FirewallManager, err = firewall.NewManager(
-		fw, map[string]models.Service{}, // TODO: Get from config
+		fw, app.ctx.Config.Services,
 		firewall.WithLogger(app.ctx.Logger),
 	)
 	if err != nil {

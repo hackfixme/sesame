@@ -7,6 +7,7 @@ import (
 	"github.com/alecthomas/kong"
 
 	actx "go.hackfix.me/sesame/app/context"
+	"go.hackfix.me/sesame/models"
 )
 
 // CLI is the command line interface of Sesame.
@@ -19,11 +20,15 @@ type CLI struct {
 	Log struct {
 		Level slog.Level `enum:"DEBUG,INFO,WARN,ERROR" default:"INFO" help:"Set the app logging level."`
 	} `embed:"" prefix:"log-"`
-	Version kong.VersionFlag `kong:"help='Output Sesame version and exit.'"`
+	// NOTE: I'm deliberately not using kong.ConfigFlag or its support for reading
+	// values from configuration files, since I want to manage configuration
+	// independently from the CLI.
+	ConfigFile string           `kong:"default='${configFile}',help='Path to the configuration file.'"`
+	Version    kong.VersionFlag `kong:"help='Output version and exit.'"`
 }
 
 // New initializes the command-line interface.
-func New(version string) (*CLI, error) {
+func New(configFilePath, version string) (*CLI, error) {
 	c := &CLI{}
 	kparser, err := kong.New(c,
 		kong.Name("sesame"),
@@ -35,7 +40,8 @@ func New(version string) (*CLI, error) {
 			NoExpandSubcommands: true,
 		}),
 		kong.Vars{
-			"version": version,
+			"configFile": configFilePath,
+			"version":    version,
 		},
 	)
 	if err != nil {
@@ -83,4 +89,18 @@ func (c *CLI) Command() string {
 	}
 
 	return strings.Join(cmdPath, " ")
+}
+
+// ApplyConfig applies configuration values to the CLI, but only if they weren't
+// already set.
+func (cli *CLI) ApplyConfig(cfg *models.Config) {
+	if cli.Serve.Address == "" && cfg.Server.Address.Valid {
+		cli.Serve.Address = cfg.Server.Address.V
+	}
+	if cli.Serve.TLSCertFile == "" && cfg.Server.TLSCertFile.Valid {
+		cli.Serve.TLSCertFile = cfg.Server.TLSCertFile.V
+	}
+	if cli.Serve.TLSKeyFile == "" && cfg.Server.TLSKeyFile.Valid {
+		cli.Serve.TLSKeyFile = cfg.Server.TLSKeyFile.V
+	}
 }

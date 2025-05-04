@@ -53,12 +53,12 @@ func (m *Manager) AllowAccess(clientIP netip.Addr, serviceName string, duration 
 		"service_port", svc.Port,
 	)
 
-	if duration > svc.MaxAccessDuration {
+	if duration > svc.MaxAccessDuration.V {
 		logger.Debug("limiting access duration to configured service max",
 			"requested_duration", duration,
 			"service_max", svc.MaxAccessDuration,
 		)
-		duration = min(duration, svc.MaxAccessDuration)
+		duration = min(duration, svc.MaxAccessDuration.V)
 	}
 
 	logger = logger.With("duration", duration)
@@ -68,7 +68,7 @@ func (m *Manager) AllowAccess(clientIP netip.Addr, serviceName string, duration 
 		logger.Warn("access duration is zero")
 	}
 
-	if err := m.firewall.Allow(clientIP, svc.Port, duration); err != nil {
+	if err := m.firewall.Allow(clientIP, svc.Port.V, duration); err != nil {
 		return fmt.Errorf("failed creating access for client %s to service %s: %w", clientIP, serviceName, err)
 	}
 

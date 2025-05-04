@@ -19,6 +19,7 @@ type Context struct {
 	Env        models.Environment // process environment
 	Logger     *slog.Logger       // global logger
 	TimeSource models.TimeSource
+	Config     *models.Config // values read from the configuration file
 
 	// Standard streams
 	Stdin  io.Reader
