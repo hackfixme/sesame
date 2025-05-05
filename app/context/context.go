@@ -25,6 +25,9 @@ type Context struct {
 	Stdout io.Writer
 	Stderr io.Writer
 
+	FirewallType    models.FirewallType
+	FirewallManager models.FirewallManager
+
 	// Metadata
 	Version *VersionInfo
 }

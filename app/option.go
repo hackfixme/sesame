@@ -37,6 +37,13 @@ func WithFDs(stdin io.Reader, stdout, stderr io.Writer) Option {
 	}
 }
 
+// WithFirewall sets the firewall implementation used by the application.
+func WithFirewall(ft models.FirewallType) Option {
+	return func(app *App) {
+		app.ctx.FirewallType = ft
+	}
+}
+
 // WithFS sets the filesystem used by the application.
 func WithFS(fs vfs.FileSystem) Option {
 	return func(app *App) {

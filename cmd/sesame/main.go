@@ -27,6 +27,7 @@ func main() {
 			isatty.IsTerminal(os.Stdout.Fd()),
 			isatty.IsTerminal(os.Stderr.Fd()),
 		),
+		app.WithFirewall(models.FirewallNFTables),
 	)
 	if err != nil {
 		aerrors.Errorf(err)

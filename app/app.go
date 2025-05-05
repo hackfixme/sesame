@@ -8,7 +8,12 @@ import (
 	"github.com/mandelsoft/vfs/pkg/memoryfs"
 
 	actx "go.hackfix.me/sesame/app/context"
+	aerrors "go.hackfix.me/sesame/app/errors"
 	"go.hackfix.me/sesame/cli"
+	"go.hackfix.me/sesame/firewall"
+	"go.hackfix.me/sesame/firewall/mock"
+	"go.hackfix.me/sesame/firewall/nftables"
+	"go.hackfix.me/sesame/models"
 )
 
 // App is the application.
@@ -34,6 +39,8 @@ func New(name string, opts ...Option) (*App, error) {
 		FS:      memoryfs.New(),
 		Logger:  slog.Default(),
 		Version: version,
+
+		FirewallType: models.FirewallMock,
 	}
 	app := &App{name: name, ctx: defaultCtx}
 
@@ -62,8 +69,33 @@ func (app *App) Run(args []string) error {
 		slog.SetLogLoggerLevel(app.cli.Log.Level)
 	}
 
+	if err := app.setupFirewall(); err != nil {
+		return err
+	}
+
 	if err := app.cli.Execute(app.ctx); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (app *App) setupFirewall() error {
+	var fw models.Firewall
+	switch app.ctx.FirewallType {
+	case models.FirewallMock:
+		fw = mock.New(app.ctx.TimeSource)
+	case models.FirewallNFTables:
+		fw = nftables.New(app.ctx.Logger)
+	}
+
+	var err error
+	app.ctx.FirewallManager, err = firewall.NewManager(
+		fw, map[string]models.Service{}, // TODO: Get from config
+		firewall.WithLogger(app.ctx.Logger),
+	)
+	if err != nil {
+		return aerrors.NewRuntimeError("failed creating new firewall manager", err, "")
 	}
 
 	return nil
