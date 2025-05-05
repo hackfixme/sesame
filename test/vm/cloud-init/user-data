@@ -1,0 +1,31 @@
+#cloud-config
+hostname: debian
+manage_etc_hosts: true
+
+users:
+  - name: sesame
+    plain_text_passwd: test
+    groups: [sudo]
+    lock_passwd: true
+    shell: /bin/bash
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKjOL0kw1km6mvlKMy0iEn8yJl3Eq6oKYc0KG+IzilS1 sesame-test
+
+ssh_pwauth: true
+
+chpasswd:
+  list: |
+    sesame:test
+  expire: false
+
+package_update: true
+package_upgrade: true
+packages:
+  - nftables
+  - rsync
+
+runcmd:
+  # Workaround for setting locale on Debian
+  # See https://github.com/canonical/cloud-init/issues/4195
+  - cloud-init-per once setlocales localectl set-locale en_US.UTF-8

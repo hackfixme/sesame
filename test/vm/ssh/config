@@ -1,0 +1,10 @@
+Host sesame-test
+  HostName localhost
+  Port 2222
+  User sesame
+  IdentityFile test/vm/ssh/id_sesame
+  UserKnownHostsFile /dev/null
+  StrictHostKeyChecking no
+  ConnectTimeout 120
+  BatchMode yes
+  LogLevel quiet
