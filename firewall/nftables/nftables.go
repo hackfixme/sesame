@@ -23,7 +23,7 @@ const (
 type NFTables struct {
 	conn  *gnft.Conn
 	table *gnft.Table
-	// Dynamic IPv4/6 sets for allowed source address and destination port pairs.
+	// IPv4/6 sets for allowed source address prefixes and destination port pairs.
 	allowedSet4 *gnft.Set
 	allowedSet6 *gnft.Set
 	logger      *slog.Logger
@@ -46,13 +46,13 @@ func New(logger *slog.Logger) *NFTables {
 //	table inet sesame {
 //	    set allowed_clients {
 //	        type ipv4_addr . inet_service
-//	        flags dynamic,timeout
+//	        flags interval,timeout
 //	        timeout 5m
 //	    }
 //
 //	    set allowed_clients6 {
 //	        type ipv6_addr . inet_service
-//	        flags dynamic,timeout
+//	        flags interval,timeout
 //	        timeout 5m
 //	    }
 //
@@ -76,10 +76,10 @@ func (n *NFTables) Setup() error {
 	n.conn.AddTable(table)
 
 	// Create IPv4 and IPv6 sets, whose elements are concatenations of the source
-	// IP address and the destination port.
+	// IP address prefix (CIDR notation) and the destination port.
 	// set allowed_clients {
 	//     type ipv4_addr . inet_service
-	//     flags dynamic,timeout
+	//     flags interval,timeout
 	//     timeout 5m
 	// }
 	n.allowedSet4 = &gnft.Set{
@@ -88,7 +88,7 @@ func (n *NFTables) Setup() error {
 		Table:         table,
 		KeyType:       gnft.MustConcatSetType(gnft.TypeIPAddr, gnft.TypeInetService),
 		Concatenation: true,
-		Dynamic:       true,
+		Interval:      true,
 		HasTimeout:    true,
 		Timeout:       5 * time.Minute,
 	}
@@ -98,7 +98,7 @@ func (n *NFTables) Setup() error {
 
 	// set allowed_clients6 {
 	//     type ipv6_addr . inet_service
-	//     flags dynamic,timeout
+	//     flags interval,timeout
 	//     timeout 5m
 	// }
 	n.allowedSet6 = &gnft.Set{
@@ -107,7 +107,7 @@ func (n *NFTables) Setup() error {
 		Table:         table,
 		KeyType:       gnft.MustConcatSetType(gnft.TypeIP6Addr, gnft.TypeInetService),
 		Concatenation: true,
-		Dynamic:       true,
+		Interval:      true,
 		HasTimeout:    true,
 		Timeout:       5 * time.Minute,
 	}
