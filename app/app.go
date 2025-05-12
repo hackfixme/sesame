@@ -100,7 +100,11 @@ func (app *App) setupFirewall() error {
 	case models.FirewallMock:
 		fw = mock.New(app.ctx.TimeSource)
 	case models.FirewallNFTables:
-		fw = nftables.New(app.ctx.Logger)
+		var err error
+		fw, err = nftables.New(app.ctx.Logger)
+		if err != nil {
+			return aerrors.NewRuntimeError("failed creating the nftables firewall", err, "")
+		}
 	}
 
 	var err error
@@ -109,7 +113,7 @@ func (app *App) setupFirewall() error {
 		firewall.WithLogger(app.ctx.Logger),
 	)
 	if err != nil {
-		return aerrors.NewRuntimeError("failed creating new firewall manager", err, "")
+		return aerrors.NewRuntimeError("failed creating the firewall manager", err, "")
 	}
 
 	return nil

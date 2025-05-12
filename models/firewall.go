@@ -1,8 +1,9 @@
 package models
 
 import (
-	"net/netip"
 	"time"
+
+	"go4.org/netipx"
 )
 
 // FirewallType are the supported firewall implementations.
@@ -18,12 +19,14 @@ type Firewall interface {
 	// Setup initializes the firewall (creates tables, chains, etc.)
 	Setup() error
 
-	// Allows the given IP address access to the port for a specific duration.
-	Allow(srcIP netip.Addr, destPort uint16, duration time.Duration) error
+	// Allow grants the given IP address range access to the port for a specific
+	// duration.
+	Allow(ipRange netipx.IPRange, destPort uint16, duration time.Duration) error
 }
 
 // FirewallManager is the interface for managing access of client IPs to services.
 type FirewallManager interface {
-	// AllowAccess allows access of a client to a service for a specific duration.
-	AllowAccess(clientIP netip.Addr, serviceName string, duration time.Duration) error
+	// AllowAccess grants access of client IP ranges in the set to a service for a
+	// specific duration.
+	AllowAccess(ipSet *netipx.IPSet, serviceName string, duration time.Duration) error
 }

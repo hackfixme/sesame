@@ -37,10 +37,13 @@ func (c *Config) Load() error {
 		return fmt.Errorf("failed reading configuration file: %w", err)
 	}
 
-	if configJSON != nil {
-		if err := json.Unmarshal(configJSON, c); err != nil {
-			return fmt.Errorf("failed parsing configuration file: %w", err)
-		}
+	// Ensure that unmarshalling JSON doesn't fail if the file doesn't exist or is empty.
+	if len(configJSON) == 0 {
+		configJSON = []byte("{}")
+	}
+
+	if err := json.Unmarshal(configJSON, c); err != nil {
+		return fmt.Errorf("failed parsing configuration file: %w", err)
 	}
 
 	return nil

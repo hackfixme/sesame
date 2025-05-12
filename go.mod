@@ -10,6 +10,7 @@ require (
 	github.com/mandelsoft/vfs v0.4.4
 	github.com/mattn/go-colorable v0.1.14
 	github.com/mattn/go-isatty v0.0.20
+	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
 	golang.org/x/sys v0.31.0
 )
 

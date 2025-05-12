@@ -1,8 +1,9 @@
 package mock
 
 import (
-	"net/netip"
 	"time"
+
+	"go4.org/netipx"
 
 	"go.hackfix.me/sesame/models"
 )
@@ -26,11 +27,11 @@ func (m *Mock) Setup() error {
 	return m.failErr
 }
 
-func (m *Mock) Allow(srcIP netip.Addr, destPort uint16, duration time.Duration) error {
+func (m *Mock) Allow(ipRange netipx.IPRange, destPort uint16, duration time.Duration) error {
 	if m.failErr != nil {
 		return m.failErr
 	}
-	ipStr := srcIP.String()
+	ipStr := ipRange.String()
 	ports, ok := m.Allowed[ipStr]
 	if !ok {
 		m.Allowed[ipStr] = make(map[uint16]time.Time)

@@ -52,6 +52,9 @@ github.com/mdlayher/socket
 # github.com/modern-go/reflect2 v1.0.2
 ## explicit; go 1.12
 github.com/modern-go/reflect2
+# go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
+## explicit; go 1.18
+go4.org/netipx
 # golang.org/x/net v0.33.0
 ## explicit; go 1.18
 golang.org/x/net/bpf

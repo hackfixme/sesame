@@ -2,44 +2,61 @@ package nftables
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"log/slog"
-	"net/netip"
+	"os"
+	"slices"
+	"strings"
 	"time"
 
 	gnft "github.com/google/nftables"
 	"github.com/google/nftables/expr"
+	"go4.org/netipx"
 	"golang.org/x/sys/unix"
 
 	"go.hackfix.me/sesame/models"
 )
 
 const (
-	tableName = "sesame"
-	chainName = "input"
+	tableName         = "sesame"
+	chainName         = "input"
+	setAllowed4Name   = "allowed_clients"
+	setAllowed6Name   = "allowed_clients6"
+	defaultSetTimeout = 5 * time.Minute
 )
 
 // NFTables is an abstraction over the Linux nftables firewall.
 type NFTables struct {
 	conn  *gnft.Conn
 	table *gnft.Table
-	// IPv4/6 sets for allowed source address prefixes and destination port pairs.
-	allowedSet4 *gnft.Set
-	allowedSet6 *gnft.Set
-	logger      *slog.Logger
+	// IPv4/6 sets for allowed source address and destination port pairs.
+	allowed map[int]*gnft.Set
+	logger  *slog.Logger
 }
 
 var _ models.Firewall = &NFTables{}
 
-// New returns a new NFTables instance.
-func New(logger *slog.Logger) *NFTables {
-	return &NFTables{
-		conn:   &gnft.Conn{},
-		logger: logger.With("component", "nftables"),
+// New returns a new NFTables instance. It returns an error if the netlink
+// connection to the kernel fails.
+func New(logger *slog.Logger) (*NFTables, error) {
+	conn, err := gnft.New()
+	if err != nil {
+		return nil, err
 	}
+	// Smoke test for permission errors
+	if _, err := conn.ListTables(); err != nil {
+		return nil, err
+	}
+	return &NFTables{
+		conn:    conn,
+		allowed: make(map[int]*gnft.Set),
+		logger:  logger.With("component", "nftables"),
+	}, nil
 }
 
-// Setup initializes the firewall.
+// Setup initializes the firewall by creating the nftables ruleset. It is
+// idempotent, and won't recreate objects if they already exist.
 //
 // It creates the following ruleset:
 //
@@ -64,36 +81,54 @@ func New(logger *slog.Logger) *NFTables {
 //	        ip6 saddr . tcp dport @allowed_clients6 accept
 //	    }
 //	}
-func (n *NFTables) Setup() error {
-	n.logger.Debug("starting setup")
+func (n *NFTables) Setup() (err error) {
+	var init bool
+	defer func() {
+		if err == nil {
+			if ferr := n.conn.Flush(); ferr != nil {
+				err = fmt.Errorf("failed flushing rules: %w", ferr)
+			} else if init {
+				n.logger.Info("firewall initialized")
+			}
+		}
+	}()
 
-	// Create the sesame table
 	// table inet sesame {}
-	table := &gnft.Table{
-		Name:   tableName,
-		Family: gnft.TableFamilyINet,
+	if n.table, err = n.conn.ListTableOfFamily(tableName, gnft.TableFamilyINet); errors.Is(err, os.ErrNotExist) {
+		n.table = &gnft.Table{
+			Name:   tableName,
+			Family: gnft.TableFamilyINet,
+		}
+		n.conn.CreateTable(n.table)
+		n.logger.Debug("initializing firewall")
+		init = true
+	} else if err != nil {
+		return fmt.Errorf("failed getting table %s: %w", tableName, err)
 	}
-	n.conn.AddTable(table)
 
-	// Create IPv4 and IPv6 sets, whose elements are concatenations of the source
-	// IP address prefix (CIDR notation) and the destination port.
+	// IPv4 and IPv6 sets, whose elements are concatenations of the source IP
+	// address and the destination port.
 	// set allowed_clients {
 	//     type ipv4_addr . inet_service
 	//     flags interval,timeout
 	//     timeout 5m
 	// }
-	n.allowedSet4 = &gnft.Set{
-		ID:            1,
-		Name:          "allowed_clients",
-		Table:         table,
-		KeyType:       gnft.MustConcatSetType(gnft.TypeIPAddr, gnft.TypeInetService),
-		Concatenation: true,
-		Interval:      true,
-		HasTimeout:    true,
-		Timeout:       5 * time.Minute,
-	}
-	if err := n.conn.AddSet(n.allowedSet4, nil); err != nil {
-		return fmt.Errorf("failed adding IPv4 set: %w", err)
+	if n.allowed[32], err = n.conn.GetSetByName(n.table, setAllowed4Name); errors.Is(err, os.ErrNotExist) {
+		n.allowed[32] = &gnft.Set{
+			ID:            1,
+			Name:          setAllowed4Name,
+			Table:         n.table,
+			KeyType:       gnft.MustConcatSetType(gnft.TypeIPAddr, gnft.TypeInetService),
+			Concatenation: true,
+			Interval:      true,
+			HasTimeout:    true,
+			Timeout:       defaultSetTimeout,
+		}
+		if err = n.conn.AddSet(n.allowed[32], nil); err != nil {
+			return fmt.Errorf("failed adding set '%s': %w", setAllowed4Name, err)
+		}
+	} else if err != nil {
+		return fmt.Errorf("failed getting set '%s': %w", setAllowed4Name, err)
 	}
 
 	// set allowed_clients6 {
@@ -101,32 +136,49 @@ func (n *NFTables) Setup() error {
 	//     flags interval,timeout
 	//     timeout 5m
 	// }
-	n.allowedSet6 = &gnft.Set{
-		ID:            2,
-		Name:          "allowed_clients6",
-		Table:         table,
-		KeyType:       gnft.MustConcatSetType(gnft.TypeIP6Addr, gnft.TypeInetService),
-		Concatenation: true,
-		Interval:      true,
-		HasTimeout:    true,
-		Timeout:       5 * time.Minute,
-	}
-	if err := n.conn.AddSet(n.allowedSet6, nil); err != nil {
-		return fmt.Errorf("failed adding IPv6 set: %w", err)
+	if n.allowed[128], err = n.conn.GetSetByName(n.table, setAllowed6Name); errors.Is(err, os.ErrNotExist) {
+		n.allowed[128] = &gnft.Set{
+			ID:            2,
+			Name:          setAllowed6Name,
+			Table:         n.table,
+			KeyType:       gnft.MustConcatSetType(gnft.TypeIP6Addr, gnft.TypeInetService),
+			Concatenation: true,
+			Interval:      true,
+			HasTimeout:    true,
+			Timeout:       defaultSetTimeout,
+		}
+		if err = n.conn.AddSet(n.allowed[128], nil); err != nil {
+			return fmt.Errorf("failed adding set '%s': %w", setAllowed6Name, err)
+		}
+	} else if err != nil {
+		return fmt.Errorf("failed getting set '%s': %w", setAllowed6Name, err)
 	}
 
-	// Create input chain
 	// chain input { type filter hook input priority filter; policy drop; }
-	dropPolicy := gnft.ChainPolicyDrop
-	chain := &gnft.Chain{
-		Name:     chainName,
-		Table:    table,
-		Type:     gnft.ChainTypeFilter,
-		Hooknum:  gnft.ChainHookInput,
-		Priority: gnft.ChainPriorityFilter,
-		Policy:   &dropPolicy,
+	var chain *gnft.Chain
+	// NOTE: Unfortunately, ListChain returns a non-wrapped error, so we can't use
+	// errors.Is(err, os.ErrNotExist) here.
+	// https://github.com/google/nftables/blob/68e1406c13281ebc65b8cb5733ee5882244809d5/chain.go#L218
+	if chain, err = n.conn.ListChain(n.table, chainName); err != nil && strings.Contains(err.Error(), "no such file or directory") {
+		dropPolicy := gnft.ChainPolicyDrop
+		chain = &gnft.Chain{
+			Name:     chainName,
+			Table:    n.table,
+			Type:     gnft.ChainTypeFilter,
+			Hooknum:  gnft.ChainHookInput,
+			Priority: gnft.ChainPriorityFilter,
+			Policy:   &dropPolicy,
+		}
+		n.conn.AddChain(chain)
+	} else if err != nil {
+		return fmt.Errorf("failed getting chain '%s': %w", chainName, err)
+	} else {
+		// The chain exists, so assume that all rules were previously created as well,
+		// in order to avoid adding duplicate rules. We could in theory check the rules
+		// themselves, but there's no straightforward way to check rule equality, so it
+		// would require comparing their count, handle, position, etc.
+		return nil
 	}
-	n.conn.AddChain(chain)
 
 	// Accept packets with mark 1
 	// meta mark 0x00000001 accept
@@ -151,7 +203,7 @@ func (n *NFTables) Setup() error {
 	//     }
 	// }
 	n.conn.AddRule(&gnft.Rule{
-		Table: table,
+		Table: n.table,
 		Chain: chain,
 		Exprs: []expr.Any{
 			&expr.Meta{Key: expr.MetaKeyMARK, Register: 1},
@@ -167,7 +219,7 @@ func (n *NFTables) Setup() error {
 	// Accept established/related connections
 	// ct state established,related accept
 	n.conn.AddRule(&gnft.Rule{
-		Table: table,
+		Table: n.table,
 		Chain: chain,
 		Exprs: []expr.Any{
 			&expr.Ct{
@@ -193,7 +245,7 @@ func (n *NFTables) Setup() error {
 	// Accept packets from allowed IPv4 clients
 	// ip saddr . tcp dport @allowed_clients accept
 	n.conn.AddRule(&gnft.Rule{
-		Table: table,
+		Table: n.table,
 		Chain: chain,
 		Exprs: []expr.Any{
 			// Store layer 3 protocol type to register 1
@@ -228,7 +280,7 @@ func (n *NFTables) Setup() error {
 			// Store the TCP destination port in register 9.
 			// Why 9? ... ¯\_(ツ)_/¯
 			// This was determined by loading the ruleset with `nft -f`, and listing it
-			// with `nft --debug=all list ruleset`.
+			// with `nft --debug=netlink list ruleset`.
 			&expr.Payload{
 				DestRegister: 9,
 				Base:         expr.PayloadBaseTransportHeader,
@@ -238,8 +290,8 @@ func (n *NFTables) Setup() error {
 			// Lookup using register 1, which will read through the other registers
 			&expr.Lookup{
 				SourceRegister: 1,
-				SetName:        n.allowedSet4.Name,
-				SetID:          n.allowedSet4.ID,
+				SetName:        n.allowed[32].Name,
+				SetID:          n.allowed[32].ID,
 			},
 			&expr.Verdict{Kind: expr.VerdictAccept},
 		},
@@ -248,7 +300,7 @@ func (n *NFTables) Setup() error {
 	// Accept packets from allowed IPv6 clients
 	// ip6 saddr . tcp dport @allowed_clients6 accept
 	n.conn.AddRule(&gnft.Rule{
-		Table: table,
+		Table: n.table,
 		Chain: chain,
 		Exprs: []expr.Any{
 			// Store layer 3 protocol type to register 1
@@ -290,50 +342,42 @@ func (n *NFTables) Setup() error {
 			// Lookup using register 1, which will read through the other registers
 			&expr.Lookup{
 				SourceRegister: 1,
-				SetName:        n.allowedSet6.Name,
-				SetID:          n.allowedSet6.ID,
+				SetName:        n.allowed[128].Name,
+				SetID:          n.allowed[128].ID,
 			},
 			&expr.Verdict{Kind: expr.VerdictAccept},
 		},
 	})
 
-	if err := n.conn.Flush(); err != nil {
-		return fmt.Errorf("failed flushing rules: %w", err)
-	}
-
-	n.logger.Debug("setup completed successfully")
 	return nil
 }
 
-// Allows the given IP address access to the port for a specific duration.
-func (n *NFTables) Allow(srcIP netip.Addr, destPort uint16, duration time.Duration) error {
-	// Prepare port bytes in network byte order (big endian)
-	portBytes := make([]byte, 2)
-	binary.BigEndian.PutUint16(portBytes, destPort)
-
-	// Choose the appropriate set based on IP version
-	var set *gnft.Set
-	var ipBytes []byte
-
-	if srcIP.Is4() {
-		set = n.allowedSet4
-		ip4 := srcIP.As4()
-		ipBytes = ip4[:]
-	} else if srcIP.Is6() {
-		set = n.allowedSet6
-		ip6 := srcIP.As16()
-		ipBytes = ip6[:]
-	} else {
-		return fmt.Errorf("invalid IP address: %s", srcIP)
+// Allows the given IP address range access to the port for a specific duration.
+func (n *NFTables) Allow(ipRange netipx.IPRange, destPort uint16, duration time.Duration) error {
+	if !ipRange.IsValid() {
+		return fmt.Errorf("invalid IP address range: %s", ipRange)
+	}
+	if destPort == 0 {
+		return fmt.Errorf("invalid port: %d", destPort)
 	}
 
-	// Concatenate IP and port bytes for the set element
-	elementData := append(ipBytes, portBytes...)
+	var (
+		ipRangeStart = ipRange.From().AsSlice()
+		ipRangeEnd   = ipRange.To().AsSlice()
+	)
 
-	// Add the element to the set
+	// Port in binary network byte order (big endian)
+	portBytes := make([]byte, 4)
+	binary.BigEndian.PutUint16(portBytes, destPort)
+
+	keyStart := slices.Concat(ipRangeStart, portBytes)
+	keyEnd := slices.Concat(ipRangeEnd, portBytes)
+
+	set := n.allowed[ipRange.From().BitLen()]
 	err := n.conn.SetAddElements(set, []gnft.SetElement{
 		{
-			Key:     elementData,
+			Key:     keyStart,
+			KeyEnd:  keyEnd,
 			Timeout: duration,
 		},
 	})
@@ -345,8 +389,8 @@ func (n *NFTables) Allow(srcIP netip.Addr, destPort uint16, duration time.Durati
 		return fmt.Errorf("failed flushing rules: %w", err)
 	}
 
-	n.logger.Debug("allowed access to client",
-		"ip", srcIP,
+	n.logger.Debug("allowed access",
+		"range", ipRange.String(),
 		"port", destPort,
 		"duration", duration)
 

@@ -3,8 +3,9 @@ package firewall
 import (
 	"fmt"
 	"log/slog"
-	"net/netip"
 	"time"
+
+	"go4.org/netipx"
 
 	"go.hackfix.me/sesame/models"
 )
@@ -15,6 +16,8 @@ type Manager struct {
 	firewall models.Firewall
 	logger   *slog.Logger
 }
+
+var _ models.FirewallManager = &Manager{}
 
 // NewManager returns a new Manager instance.
 func NewManager(firewall models.Firewall, services map[string]models.Service, opts ...Option) (*Manager, error) {
@@ -41,38 +44,38 @@ func NewManager(firewall models.Firewall, services map[string]models.Service, op
 	return m, nil
 }
 
-// AllowAccess allows access of a client to a service for a specific duration.
-func (m *Manager) AllowAccess(clientIP netip.Addr, serviceName string, duration time.Duration) error {
+// AllowAccess allows access of client IP addresses to a service for a specific
+// duration. The passed IPSet must consist of valid IPRanges.
+func (m *Manager) AllowAccess(ipSet *netipx.IPSet, serviceName string, duration time.Duration) error {
 	svc, ok := m.services[serviceName]
 	if !ok {
 		return fmt.Errorf("unknown service: %s", serviceName)
 	}
+
 	logger := m.logger.With(
-		"client_ip", clientIP,
 		"service_name", serviceName,
-		"service_port", svc.Port,
+		"service_port", svc.Port.V,
 	)
 
 	if duration > svc.MaxAccessDuration.V {
 		logger.Debug("limiting access duration to configured service max",
 			"requested_duration", duration,
-			"service_max", svc.MaxAccessDuration,
+			"service_max", svc.MaxAccessDuration.V,
 		)
 		duration = min(duration, svc.MaxAccessDuration.V)
 	}
 
 	logger = logger.With("duration", duration)
-	logger.Debug("creating temporary access")
 
-	if duration == 0 {
-		logger.Warn("access duration is zero")
+	for _, ipRange := range ipSet.Ranges() {
+		logger.With("client_ip_range", ipRange.String()).Debug("creating temporary access")
+
+		if err := m.firewall.Allow(ipRange, svc.Port.V, duration); err != nil {
+			return fmt.Errorf("failed creating access for client IP range '%s' to service %s: %w", ipRange, serviceName, err)
+		}
+
+		logger.With("client_ip_range", ipRange.String()).Info("created temporary access")
 	}
-
-	if err := m.firewall.Allow(clientIP, svc.Port.V, duration); err != nil {
-		return fmt.Errorf("failed creating access for client %s to service %s: %w", clientIP, serviceName, err)
-	}
-
-	logger.Info("created temporary access")
 
 	return nil
 }
