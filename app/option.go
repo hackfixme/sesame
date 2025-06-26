@@ -8,6 +8,7 @@ import (
 	"github.com/lmittmann/tint"
 	"github.com/mandelsoft/vfs/pkg/vfs"
 
+	actx "go.hackfix.me/sesame/app/context"
 	"go.hackfix.me/sesame/models"
 )
 
@@ -29,7 +30,7 @@ func WithContext(ctx context.Context) Option {
 }
 
 // WithEnv sets the process environment used by the application.
-func WithEnv(env models.Environment) Option {
+func WithEnv(env actx.Environment) Option {
 	return func(app *App) {
 		app.ctx.Env = env
 	}

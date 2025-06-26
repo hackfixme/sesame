@@ -1,4 +1,4 @@
-package models
+package context
 
 // Environment is the interface to the process environment.
 type Environment interface {

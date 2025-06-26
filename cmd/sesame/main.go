@@ -11,6 +11,7 @@ import (
 	"github.com/mattn/go-isatty"
 
 	"go.hackfix.me/sesame/app"
+	actx "go.hackfix.me/sesame/app/context"
 	aerrors "go.hackfix.me/sesame/app/errors"
 	"go.hackfix.me/sesame/models"
 )
@@ -44,7 +45,7 @@ func main() {
 
 type osEnv struct{}
 
-var _ models.Environment = &osEnv{}
+var _ actx.Environment = &osEnv{}
 
 func (e osEnv) Get(key string) string {
 	return os.Getenv(key)
