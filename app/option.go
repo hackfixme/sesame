@@ -61,7 +61,7 @@ func WithFS(fs vfs.FileSystem) Option {
 }
 
 // WithLogger initializes the logger used by the application.
-func WithLogger(isStdoutTTY, isStderrTTY bool) Option {
+func WithLogger(_, isStderrTTY bool) Option {
 	return func(app *App) {
 		lvl := &slog.LevelVar{}
 		lvl.Set(slog.LevelInfo)

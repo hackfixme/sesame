@@ -42,11 +42,11 @@ var _ models.Firewall = (*NFTables)(nil)
 func New(logger *slog.Logger) (*NFTables, error) {
 	conn, err := gnft.New()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed establishing netlink connection: %w", err)
 	}
 	// Smoke test for permission errors
-	if _, err := conn.ListTables(); err != nil {
-		return nil, err
+	if _, err = conn.ListTables(); err != nil {
+		return nil, fmt.Errorf("failed listing tables: %w", err)
 	}
 	return &NFTables{
 		conn:    conn,
@@ -81,6 +81,8 @@ func New(logger *slog.Logger) (*NFTables, error) {
 //	        ip6 saddr . tcp dport @allowed_clients6 accept
 //	    }
 //	}
+//
+//nolint:funlen // This is easier to understand as a single long function.
 func (n *NFTables) Setup() (err error) {
 	var init bool
 	defer func() {
@@ -156,10 +158,12 @@ func (n *NFTables) Setup() (err error) {
 
 	// chain input { type filter hook input priority filter; policy drop; }
 	var chain *gnft.Chain
+	_, err = n.conn.ListChain(n.table, chainName)
+	switch {
 	// NOTE: Unfortunately, ListChain returns a non-wrapped error, so we can't use
 	// errors.Is(err, os.ErrNotExist) here.
 	// https://github.com/google/nftables/blob/68e1406c13281ebc65b8cb5733ee5882244809d5/chain.go#L218
-	if chain, err = n.conn.ListChain(n.table, chainName); err != nil && strings.Contains(err.Error(), "no such file or directory") {
+	case err != nil && strings.Contains(err.Error(), "no such file or directory"):
 		dropPolicy := gnft.ChainPolicyDrop
 		chain = &gnft.Chain{
 			Name:     chainName,
@@ -170,9 +174,9 @@ func (n *NFTables) Setup() (err error) {
 			Policy:   &dropPolicy,
 		}
 		n.conn.AddChain(chain)
-	} else if err != nil {
+	case err != nil:
 		return fmt.Errorf("failed getting chain '%s': %w", chainName, err)
-	} else {
+	default:
 		// The chain exists, so assume that all rules were previously created as well,
 		// in order to avoid adding duplicate rules. We could in theory check the rules
 		// themselves, but there's no straightforward way to check rule equality, so it
@@ -244,6 +248,7 @@ func (n *NFTables) Setup() (err error) {
 
 	// Accept packets from allowed IPv4 clients
 	// ip saddr . tcp dport @allowed_clients accept
+	//nolint:dupl // This rule is very similar to the IPv6 one, but not the same.
 	n.conn.AddRule(&gnft.Rule{
 		Table: n.table,
 		Chain: chain,
@@ -299,6 +304,7 @@ func (n *NFTables) Setup() (err error) {
 
 	// Accept packets from allowed IPv6 clients
 	// ip6 saddr . tcp dport @allowed_clients6 accept
+	//nolint:dupl // This rule is very similar to the IPv4 one, but not the same.
 	n.conn.AddRule(&gnft.Rule{
 		Table: n.table,
 		Chain: chain,
@@ -352,7 +358,7 @@ func (n *NFTables) Setup() (err error) {
 	return nil
 }
 
-// Allows the given IP address range access to the port for a specific duration.
+// Allow gives the specified IP address range access to the port for a specific duration.
 func (n *NFTables) Allow(ipRange netipx.IPRange, destPort uint16, duration time.Duration) error {
 	if !ipRange.IsValid() {
 		return fmt.Errorf("invalid IP address range: %s", ipRange)
@@ -385,7 +391,7 @@ func (n *NFTables) Allow(ipRange netipx.IPRange, destPort uint16, duration time.
 		return fmt.Errorf("failed adding element to set: %w", err)
 	}
 
-	if err := n.conn.Flush(); err != nil {
+	if err = n.conn.Flush(); err != nil {
 		return fmt.Errorf("failed flushing rules: %w", err)
 	}
 

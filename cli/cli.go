@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -47,7 +48,7 @@ func New(configFilePath, version string) (*CLI, error) {
 		},
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed creating the Kong parser: %w", err)
 	}
 
 	c.kong = kparser
@@ -63,6 +64,7 @@ func (c *CLI) Execute(appCtx *actx.Context) error {
 	c.kong.Stdout = appCtx.Stdout
 	c.kong.Stderr = appCtx.Stderr
 
+	//nolint:wrapcheck // This is fine.
 	return c.kctx.Run(appCtx)
 }
 
@@ -71,7 +73,7 @@ func (c *CLI) Execute(appCtx *actx.Context) error {
 func (c *CLI) Parse(args []string) error {
 	kctx, err := c.kong.Parse(args)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed parsing CLI arguments: %w", err)
 	}
 	c.kctx = kctx
 
@@ -95,14 +97,14 @@ func (c *CLI) Command() string {
 
 // ApplyConfig applies configuration values to the CLI, but only if they weren't
 // already set.
-func (cli *CLI) ApplyConfig(cfg *models.Config) {
-	if cli.Serve.Address == "" && cfg.Server.Address.Valid {
-		cli.Serve.Address = cfg.Server.Address.V
+func (c *CLI) ApplyConfig(cfg *models.Config) {
+	if c.Serve.Address == "" && cfg.Server.Address.Valid {
+		c.Serve.Address = cfg.Server.Address.V
 	}
-	if cli.Serve.TLSCertFile == "" && cfg.Server.TLSCertFile.Valid {
-		cli.Serve.TLSCertFile = cfg.Server.TLSCertFile.V
+	if c.Serve.TLSCertFile == "" && cfg.Server.TLSCertFile.Valid {
+		c.Serve.TLSCertFile = cfg.Server.TLSCertFile.V
 	}
-	if cli.Serve.TLSKeyFile == "" && cfg.Server.TLSKeyFile.Valid {
-		cli.Serve.TLSKeyFile = cfg.Server.TLSKeyFile.V
+	if c.Serve.TLSKeyFile == "" && cfg.Server.TLSKeyFile.Valid {
+		c.Serve.TLSKeyFile = cfg.Server.TLSKeyFile.V
 	}
 }

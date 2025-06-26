@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 )
 
+//nolint:gochecknoglobals // This is a common pattern for stdlib flag parsing.
 var (
 	path    = flag.String("path", ".", "path to the directory to serve.")
 	address = flag.String("address", ":8080", "address to serve on.")
@@ -33,6 +34,7 @@ func main() {
 	}
 }
 
+// Serve starts listening on the given address, serving the files in path.
 func Serve(address string, path string) error {
 	mux := http.NewServeMux()
 	fs := http.FileServer(http.Dir(path))
@@ -45,6 +47,7 @@ func Serve(address string, path string) error {
 
 	slog.Info("started static file server", "path", path, "address", ln.Addr().String())
 
+	//nolint:gosec,wrapcheck // Ignore G114: this is a simple server used in development.
 	return http.Serve(ln, mux)
 }
 

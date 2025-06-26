@@ -51,14 +51,14 @@ func newTestApp(ctx context.Context, options ...Option) (*testApp, error) {
 	}
 	tapp.flushOutputs = func() error {
 		stdoutW.Reset()
-		if _, err := stdoutW.ReadFrom(stdoutW.tmp); err != nil {
-			return err
+		if _, rerr := stdoutW.ReadFrom(stdoutW.tmp); rerr != nil {
+			return rerr
 		}
 		stdoutW.tmp.Reset()
 
 		stderrW.Reset()
-		if _, err := stderrW.ReadFrom(stderrW.tmp); err != nil {
-			return err
+		if _, rerr := stderrW.ReadFrom(stderrW.tmp); rerr != nil {
+			return rerr
 		}
 		stderrW.tmp.Reset()
 
@@ -185,7 +185,7 @@ func (hw *hookWriter) Write(p []byte) (n int, err error) {
 func newTestContext(t *testing.T, timeout time.Duration) (
 	ctx context.Context, cancelCtx func(), assertHandler func(bool),
 ) {
-	ctx, cancelCtx = context.WithTimeout(context.Background(), timeout)
+	ctx, cancelCtx = context.WithTimeout(t.Context(), timeout)
 	assertHandler = func(success bool) {
 		if !success {
 			cancelCtx()

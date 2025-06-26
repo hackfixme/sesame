@@ -10,9 +10,10 @@ import (
 )
 
 // The semantic version of the application.
-// This can be overriden by vcsVersion.
+// This can be overridden by vcsVersion.
 const version = "0.0.0"
 
+//nolint:gochecknoglobals // vcsVersion is set at build time and must be global.
 var (
 	vcsVersion string // version from VCS set at build time
 	// Simplified semver regex. A more complete one can be found on https://semver.org/

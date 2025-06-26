@@ -5,23 +5,29 @@ import (
 	"log/slog"
 )
 
+// WithCause represents an error that can provide its underlying cause.
 type WithCause interface{ Cause() error }
 
+// WithHint represents an error that can provide a helpful hint for resolution.
 type WithHint interface{ Hint() string }
 
+// WithMessage represents an error that can provide its core message.
 type WithMessage interface{ Message() string }
 
-type Runtime struct {
+// RuntimeError represents a runtime error with an optional cause and hint.
+type RuntimeError struct {
 	msg   string
 	cause error
 	hint  string
 }
 
-func NewRuntimeError(msg string, cause error, hint string) Runtime {
-	return Runtime{msg: msg, cause: cause, hint: hint}
+// NewRuntimeError creates a new Runtime error with the given message, cause, and hint.
+func NewRuntimeError(msg string, cause error, hint string) RuntimeError {
+	return RuntimeError{msg: msg, cause: cause, hint: hint}
 }
 
-func (e Runtime) Error() string {
+// Error returns the string representation of this runtime error.
+func (e RuntimeError) Error() string {
 	msgFmt := "%s"
 	args := []any{e.msg}
 	if e.cause != nil {
@@ -35,15 +41,18 @@ func (e Runtime) Error() string {
 	return fmt.Sprintf(msgFmt, args...)
 }
 
-func (e Runtime) Cause() error {
+// Cause returns the underlying error that caused this runtime error.
+func (e RuntimeError) Cause() error {
 	return e.cause
 }
 
-func (e Runtime) Hint() string {
+// Hint returns a helpful hint for resolving this runtime error.
+func (e RuntimeError) Hint() string {
 	return e.hint
 }
 
-func (e Runtime) Message() string {
+// Message returns the core message of this runtime error.
+func (e RuntimeError) Message() string {
 	return e.msg
 }
 

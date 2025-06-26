@@ -10,6 +10,8 @@ import (
 	"github.com/mandelsoft/vfs/pkg/vfs"
 )
 
+// Config represents the application configuration, backed by a filesystem for
+// persistence.
 type Config struct {
 	fs       vfs.FileSystem
 	path     string
@@ -17,16 +19,22 @@ type Config struct {
 	Services map[string]Service `json:"services"`
 }
 
+// ConfigServer holds server-specific configuration options including
+// network address and TLS certificate settings.
 type ConfigServer struct {
 	Address     sql.Null[string] `json:"address"`
 	TLSCertFile sql.Null[string] `json:"tls_cert_file"`
 	TLSKeyFile  sql.Null[string] `json:"tls_key_file"`
 }
 
+// NewConfig creates a new Config instance with the specified filesystem
+// and configuration file path.
 func NewConfig(fs vfs.FileSystem, path string) *Config {
 	return &Config{fs: fs, path: path}
 }
 
+// Load reads and parses the configuration file from the filesystem.
+// If the file doesn't exist, it initializes with an empty configuration.
 func (c *Config) Load() error {
 	if err := c.fs.MkdirAll(filepath.Dir(c.path), 0o755); err != nil {
 		return fmt.Errorf("failed creating configuration directory: %w", err)
@@ -42,17 +50,19 @@ func (c *Config) Load() error {
 		configJSON = []byte("{}")
 	}
 
-	if err := json.Unmarshal(configJSON, c); err != nil {
+	if err = json.Unmarshal(configJSON, c); err != nil {
 		return fmt.Errorf("failed parsing configuration file: %w", err)
 	}
 
 	return nil
 }
 
+// Path returns the filesystem path where the configuration is stored.
 func (c *Config) Path() string {
 	return c.path
 }
 
+// Save writes the current configuration to the filesystem as JSON.
 func (c *Config) Save() error {
 	if err := c.fs.MkdirAll(filepath.Dir(c.path), 0o755); err != nil {
 		return fmt.Errorf("failed creating configuration directory: %w", err)
@@ -82,6 +92,8 @@ type svcWrapper struct {
 	MaxAccessDuration string `json:"max_access_duration,omitempty"`
 }
 
+// MarshalJSON implements custom JSON marshaling to convert sql.Null values
+// to their underlying types, omitting invalid/null fields from the output.
 func (c Config) MarshalJSON() ([]byte, error) {
 	w := cfgWrapper{
 		Services: make(map[string]svcWrapper),
@@ -104,12 +116,16 @@ func (c Config) MarshalJSON() ([]byte, error) {
 		}
 	}
 
+	//nolint:wrapcheck // This is fine.
 	return json.Marshal(w)
 }
 
+// UnmarshalJSON implements custom JSON unmarshaling to convert plain values
+// into sql.Null types and parse duration strings into time.Duration values.
 func (c *Config) UnmarshalJSON(data []byte) error {
 	var w cfgWrapper
 	if err := json.Unmarshal(data, &w); err != nil {
+		//nolint:wrapcheck // This is fine.
 		return err
 	}
 

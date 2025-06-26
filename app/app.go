@@ -21,7 +21,6 @@ type App struct {
 	name string
 	ctx  *actx.Context
 	cli  *cli.CLI
-	args []string
 	// the logging level is set via the CLI, if the app was initialized with the
 	// WithLogger option.
 	logLevel       *slog.LevelVar

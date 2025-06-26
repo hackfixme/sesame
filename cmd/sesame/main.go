@@ -1,3 +1,4 @@
+// Package main contains the entrypoint for the application.
 package main
 
 import (
@@ -52,5 +53,6 @@ func (e osEnv) Get(key string) string {
 }
 
 func (e osEnv) Set(key, val string) error {
+	//nolint:wrapcheck // This is fine.
 	return os.Setenv(key, val)
 }

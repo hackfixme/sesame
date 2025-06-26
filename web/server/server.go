@@ -62,12 +62,14 @@ func (s *Server) ListenAndServe() error {
 		srvType = "HTTP"
 	}
 	if err != nil {
+		//nolint:wrapcheck // This is fine.
 		return err
 	}
 
 	s.Addr = ln.Addr().String()
 	s.appCtx.Logger.Info(fmt.Sprintf("started %s server", srvType), "address", s.Addr)
 
+	//nolint:wrapcheck // This is fine.
 	return s.Serve(ln)
 }
 
@@ -80,7 +82,7 @@ func defaultTLSConfig() *tls.Config {
 		PreferServerCipherSuites: true,
 		// Only use curves which have constant-time implementations
 		CurvePreferences: []tls.CurveID{
-			tls.CurveID(tls.CurveP256),
+			tls.CurveP256,
 			tls.CurveID(tls.Ed25519),
 		},
 	}

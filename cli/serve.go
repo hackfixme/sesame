@@ -76,7 +76,7 @@ func (c *Serve) Run(appCtx *actx.Context) error {
 		return nil
 	}
 
-	if err := srv.Shutdown(appCtx.Ctx); err != nil && !errors.Is(err, context.DeadlineExceeded) {
+	if err = srv.Shutdown(appCtx.Ctx); err != nil && !errors.Is(err, context.DeadlineExceeded) {
 		return fmt.Errorf("failed shutting down web server: %w", err)
 	}
 

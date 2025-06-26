@@ -168,6 +168,13 @@ linters:
           - lll
           - wrapcheck
         path: _(test|gen)\.go
+      - linters:
+          - lll
+        source: "// - http.*"
+      - linters:
+          - unused
+        # TODO: Remove when integration tests are added.
+        path: app/utils_test.go
     paths:
       - third_party$
       - builtin$

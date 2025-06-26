@@ -9,6 +9,7 @@ import (
 // FirewallType are the supported firewall implementations.
 type FirewallType string
 
+// All supported firewall implementations.
 const (
 	FirewallMock     FirewallType = "mock"
 	FirewallNFTables FirewallType = "nftables"

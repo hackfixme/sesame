@@ -46,7 +46,7 @@ func (c *Service) Run(kctx *kong.Context, appCtx *actx.Context) error {
 		appCtx.Config.Services[c.Add.Name] = models.Service{
 			Name:              sql.Null[string]{V: c.Add.Name, Valid: true},
 			Port:              sql.Null[uint16]{V: uint16(c.Add.Port), Valid: true},
-			MaxAccessDuration: sql.Null[time.Duration]{V: time.Duration(c.Add.MaxAccessDuration), Valid: true},
+			MaxAccessDuration: sql.Null[time.Duration]{V: c.Add.MaxAccessDuration, Valid: true},
 		}
 		action = "adding"
 	case "remove", "rm":
@@ -62,7 +62,7 @@ func (c *Service) Run(kctx *kong.Context, appCtx *actx.Context) error {
 		appCtx.Config.Services[c.Update.Name] = models.Service{
 			Name:              sql.Null[string]{V: c.Update.Name, Valid: true},
 			Port:              sql.Null[uint16]{V: uint16(c.Update.Port), Valid: true},
-			MaxAccessDuration: sql.Null[time.Duration]{V: time.Duration(c.Update.MaxAccessDuration), Valid: true},
+			MaxAccessDuration: sql.Null[time.Duration]{V: c.Update.MaxAccessDuration, Valid: true},
 		}
 		action = "updating"
 	case "list", "ls":
@@ -77,13 +77,25 @@ func (c *Service) Run(kctx *kong.Context, appCtx *actx.Context) error {
 		slices.Sort(svcNames)
 
 		w := tabwriter.NewWriter(appCtx.Stdout, 6, 2, 2, ' ', 0)
-		fmt.Fprintln(w, "Name\tPort\tMax Access Duration\t")
-		fmt.Fprintln(w, "----\t----\t-------------------\t")
+		_, err := fmt.Fprintln(w, "Name\tPort\tMax Access Duration")
+		if err != nil {
+			return aerrors.NewRuntimeError("failed writing to stdout", err, "")
+		}
+		_, err = fmt.Fprintln(w, "----\t----\t-------------------")
+		if err != nil {
+			return aerrors.NewRuntimeError("failed writing to stdout", err, "")
+		}
 		for _, svcName := range svcNames {
 			svc := appCtx.Config.Services[svcName]
-			fmt.Fprintln(w, fmt.Sprintf("%s\t%d\t%s\t", svc.Name.V, svc.Port.V, svc.MaxAccessDuration.V))
+			_, err = fmt.Fprintf(w, "%s\t%d\t%s\n", svc.Name.V, svc.Port.V, svc.MaxAccessDuration.V)
+			if err != nil {
+				return aerrors.NewRuntimeError("failed writing to stdout", err, "")
+			}
 		}
-		w.Flush()
+		err = w.Flush()
+		if err != nil {
+			return aerrors.NewRuntimeError("failed flushing stdout writer", err, "")
+		}
 
 		return nil
 	}
