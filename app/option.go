@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"time"
 
 	"github.com/lmittmann/tint"
 	"github.com/mandelsoft/vfs/pkg/vfs"
@@ -77,9 +78,9 @@ func WithLogger(isStdoutTTY, isStderrTTY bool) Option {
 	}
 }
 
-// WithTimeSource sets the time interface used by the application.
-func WithTimeSource(ts models.TimeSource) Option {
+// WithTimeNow sets the function used to retrieve the current system time.
+func WithTimeNow(timeNowFn func() time.Time) Option {
 	return func(app *App) {
-		app.ctx.TimeSource = ts
+		app.ctx.TimeNow = timeNowFn
 	}
 }

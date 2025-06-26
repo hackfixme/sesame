@@ -14,6 +14,8 @@ import (
 	actx "go.hackfix.me/sesame/app/context"
 )
 
+var timeNow = time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+
 type testApp struct {
 	*App
 	stdin          io.Writer
@@ -35,6 +37,7 @@ func newTestApp(ctx context.Context, options ...Option) (*testApp, error) {
 		WithFS(memoryfs.New()),
 		WithLogger(false, false),
 		WithEnv(env),
+		WithTimeNow(func() time.Time { return timeNow }),
 	}
 	opts = append(opts, options...)
 	app, err := New("sesame", "/config.json", opts...)

@@ -19,7 +19,7 @@ import (
 func main() {
 	a, err := app.New("sesame",
 		filepath.Join(xdg.ConfigHome, "sesame", "config.json"),
-		app.WithTimeSource(osTime{}),
+		app.WithTimeNow(time.Now),
 		app.WithEnv(osEnv{}),
 		app.WithFDs(
 			os.Stdin,
@@ -53,12 +53,4 @@ func (e osEnv) Get(key string) string {
 
 func (e osEnv) Set(key, val string) error {
 	return os.Setenv(key, val)
-}
-
-type osTime struct{}
-
-var _ models.TimeSource = &osTime{}
-
-func (osTime) Now() time.Time {
-	return time.Now()
 }

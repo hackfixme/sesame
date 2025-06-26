@@ -98,7 +98,7 @@ func (app *App) setupFirewall() error {
 	var fw models.Firewall
 	switch app.ctx.FirewallType {
 	case models.FirewallMock:
-		fw = mock.New(app.ctx.TimeSource)
+		fw = mock.New(app.ctx.TimeNow)
 	case models.FirewallNFTables:
 		var err error
 		fw, err = nftables.New(app.ctx.Logger)

@@ -11,15 +11,15 @@ import (
 type Mock struct {
 	Allowed map[string]map[uint16]time.Time
 	failErr error // to simulate errors
-	ts      models.TimeSource
+	timeNow func() time.Time
 }
 
 var _ models.Firewall = &Mock{}
 
-func New(ts models.TimeSource) *Mock {
+func New(timeNow func() time.Time) *Mock {
 	return &Mock{
 		Allowed: make(map[string]map[uint16]time.Time),
-		ts:      ts,
+		timeNow: timeNow,
 	}
 }
 
@@ -36,7 +36,7 @@ func (m *Mock) Allow(ipRange netipx.IPRange, destPort uint16, duration time.Dura
 	if !ok {
 		m.Allowed[ipStr] = make(map[uint16]time.Time)
 	}
-	ports[destPort] = m.ts.Now().Add(duration)
+	ports[destPort] = m.timeNow().Add(duration)
 	return nil
 }
 
