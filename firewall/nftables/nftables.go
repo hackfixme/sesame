@@ -35,7 +35,7 @@ type NFTables struct {
 	logger  *slog.Logger
 }
 
-var _ models.Firewall = &NFTables{}
+var _ models.Firewall = (*NFTables)(nil)
 
 // New returns a new NFTables instance. It returns an error if the netlink
 // connection to the kernel fails.

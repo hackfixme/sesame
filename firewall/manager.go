@@ -17,7 +17,7 @@ type Manager struct {
 	logger   *slog.Logger
 }
 
-var _ models.FirewallManager = &Manager{}
+var _ models.FirewallManager = (*Manager)(nil)
 
 // NewManager returns a new Manager instance.
 func NewManager(firewall models.Firewall, services map[string]models.Service, opts ...Option) (*Manager, error) {

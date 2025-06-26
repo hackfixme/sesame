@@ -45,7 +45,7 @@ func main() {
 
 type osEnv struct{}
 
-var _ actx.Environment = &osEnv{}
+var _ actx.Environment = (*osEnv)(nil)
 
 func (e osEnv) Get(key string) string {
 	return os.Getenv(key)

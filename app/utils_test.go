@@ -85,7 +85,7 @@ type mockEnv struct {
 	env map[string]string
 }
 
-var _ actx.Environment = &mockEnv{}
+var _ actx.Environment = (*mockEnv)(nil)
 
 func (me *mockEnv) Get(key string) string {
 	me.mx.RLock()

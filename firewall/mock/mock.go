@@ -14,7 +14,7 @@ type Mock struct {
 	timeNow func() time.Time
 }
 
-var _ models.Firewall = &Mock{}
+var _ models.Firewall = (*Mock)(nil)
 
 func New(timeNow func() time.Time) *Mock {
 	return &Mock{
