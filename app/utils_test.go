@@ -37,7 +37,7 @@ func newTestApp(ctx context.Context, options ...Option) (*testApp, error) {
 		WithEnv(env),
 	}
 	opts = append(opts, options...)
-	app, err := New("sesame", opts...)
+	app, err := New("sesame", "/config.json", opts...)
 	if err != nil {
 		return nil, err
 	}
