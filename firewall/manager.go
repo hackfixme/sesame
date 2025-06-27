@@ -7,20 +7,21 @@ import (
 
 	"go4.org/netipx"
 
-	"go.hackfix.me/sesame/models"
+	"go.hackfix.me/sesame/firewall/types"
+	svc "go.hackfix.me/sesame/service"
 )
 
 // Manager manages access of client IPs to services.
 type Manager struct {
-	services map[string]models.Service
-	firewall models.Firewall
+	services map[string]svc.Service
+	firewall types.Firewall
 	logger   *slog.Logger
 }
 
-var _ models.FirewallManager = (*Manager)(nil)
+var _ types.FirewallManager = (*Manager)(nil)
 
 // NewManager returns a new Manager instance.
-func NewManager(firewall models.Firewall, services map[string]models.Service, opts ...Option) (*Manager, error) {
+func NewManager(firewall types.Firewall, services map[string]svc.Service, opts ...Option) (*Manager, error) {
 	if firewall == nil {
 		return nil, fmt.Errorf("firewall implementation is required")
 	}

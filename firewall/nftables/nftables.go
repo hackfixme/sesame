@@ -15,7 +15,7 @@ import (
 	"go4.org/netipx"
 	"golang.org/x/sys/unix"
 
-	"go.hackfix.me/sesame/models"
+	ftypes "go.hackfix.me/sesame/firewall/types"
 )
 
 const (
@@ -35,7 +35,7 @@ type NFTables struct {
 	logger  *slog.Logger
 }
 
-var _ models.Firewall = (*NFTables)(nil)
+var _ ftypes.Firewall = (*NFTables)(nil)
 
 // New returns a new NFTables instance. It returns an error if the netlink
 // connection to the kernel fails.

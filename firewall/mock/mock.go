@@ -5,7 +5,7 @@ import (
 
 	"go4.org/netipx"
 
-	"go.hackfix.me/sesame/models"
+	ftypes "go.hackfix.me/sesame/firewall/types"
 )
 
 // Mock is a firewall implementation for testing that tracks allowed IP ranges
@@ -17,7 +17,7 @@ type Mock struct {
 	timeNow func() time.Time
 }
 
-var _ models.Firewall = (*Mock)(nil)
+var _ ftypes.Firewall = (*Mock)(nil)
 
 // New creates a new Mock firewall instance with the provided time function.
 // The timeNow function is used to determine current time for expiration calculations.

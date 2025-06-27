@@ -12,7 +12,7 @@ import (
 
 	actx "go.hackfix.me/sesame/app/context"
 	aerrors "go.hackfix.me/sesame/app/errors"
-	"go.hackfix.me/sesame/models"
+	svc "go.hackfix.me/sesame/service"
 )
 
 // Service manages the services clients are allowed to access.
@@ -43,7 +43,7 @@ func (c *Service) Run(kctx *kong.Context, appCtx *actx.Context) error {
 		if _, ok := appCtx.Config.Services[c.Add.Name]; ok {
 			return aerrors.NewRuntimeError(fmt.Sprintf("service '%s' already exists", c.Add.Name), nil, "")
 		}
-		appCtx.Config.Services[c.Add.Name] = models.Service{
+		appCtx.Config.Services[c.Add.Name] = svc.Service{
 			Name:              sql.Null[string]{V: c.Add.Name, Valid: true},
 			Port:              sql.Null[uint16]{V: uint16(c.Add.Port), Valid: true},
 			MaxAccessDuration: sql.Null[time.Duration]{V: c.Add.MaxAccessDuration, Valid: true},
@@ -59,7 +59,7 @@ func (c *Service) Run(kctx *kong.Context, appCtx *actx.Context) error {
 		if _, ok := appCtx.Config.Services[c.Update.Name]; !ok {
 			return aerrors.NewRuntimeError(fmt.Sprintf("service '%s' doesn't exist", c.Update.Name), nil, "")
 		}
-		appCtx.Config.Services[c.Update.Name] = models.Service{
+		appCtx.Config.Services[c.Update.Name] = svc.Service{
 			Name:              sql.Null[string]{V: c.Update.Name, Valid: true},
 			Port:              sql.Null[uint16]{V: uint16(c.Update.Port), Valid: true},
 			MaxAccessDuration: sql.Null[time.Duration]{V: c.Update.MaxAccessDuration, Valid: true},

@@ -8,7 +8,8 @@ import (
 
 	"github.com/mandelsoft/vfs/pkg/vfs"
 
-	"go.hackfix.me/sesame/models"
+	cfg "go.hackfix.me/sesame/app/config"
+	ftypes "go.hackfix.me/sesame/firewall/types"
 )
 
 // Context contains common objects used by the application. It is passed around
@@ -20,15 +21,15 @@ type Context struct {
 	Env     Environment     // process environment
 	Logger  *slog.Logger    // global logger
 	TimeNow func() time.Time
-	Config  *models.Config // values read from the configuration file
+	Config  *cfg.Config // values read from the configuration file
 
 	// Standard streams
 	Stdin  io.Reader
 	Stdout io.Writer
 	Stderr io.Writer
 
-	FirewallType    models.FirewallType
-	FirewallManager models.FirewallManager
+	FirewallType    ftypes.FirewallType
+	FirewallManager ftypes.FirewallManager
 
 	// Metadata
 	Version *VersionInfo

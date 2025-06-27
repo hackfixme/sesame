@@ -14,7 +14,7 @@ import (
 	"go.hackfix.me/sesame/app"
 	actx "go.hackfix.me/sesame/app/context"
 	aerrors "go.hackfix.me/sesame/app/errors"
-	"go.hackfix.me/sesame/models"
+	ftypes "go.hackfix.me/sesame/firewall/types"
 )
 
 func main() {
@@ -32,7 +32,7 @@ func main() {
 			isatty.IsTerminal(os.Stdout.Fd()),
 			isatty.IsTerminal(os.Stderr.Fd()),
 		),
-		app.WithFirewall(models.FirewallNFTables),
+		app.WithFirewall(ftypes.FirewallNFTables),
 	)
 	if err != nil {
 		aerrors.Errorf(err)

@@ -7,13 +7,14 @@ import (
 
 	"github.com/mandelsoft/vfs/pkg/memoryfs"
 
+	cfg "go.hackfix.me/sesame/app/config"
 	actx "go.hackfix.me/sesame/app/context"
 	aerrors "go.hackfix.me/sesame/app/errors"
 	"go.hackfix.me/sesame/cli"
 	"go.hackfix.me/sesame/firewall"
 	"go.hackfix.me/sesame/firewall/mock"
 	"go.hackfix.me/sesame/firewall/nftables"
-	"go.hackfix.me/sesame/models"
+	ftypes "go.hackfix.me/sesame/firewall/types"
 )
 
 // App is the application.
@@ -40,7 +41,7 @@ func New(name string, configFilePath string, opts ...Option) (*App, error) {
 		Logger:  slog.Default(),
 		Version: version,
 
-		FirewallType: models.FirewallMock,
+		FirewallType: ftypes.FirewallMock,
 	}
 	app := &App{
 		name:           name,
@@ -74,7 +75,7 @@ func (app *App) Run(args []string) error {
 	}
 
 	if app.ctx.Config == nil || app.ctx.Config.Path() != app.cli.ConfigFile {
-		app.ctx.Config = models.NewConfig(app.ctx.FS, app.configFilePath)
+		app.ctx.Config = cfg.NewConfig(app.ctx.FS, app.configFilePath)
 		if err := app.ctx.Config.Load(); err != nil {
 			return err
 		}
@@ -94,11 +95,11 @@ func (app *App) Run(args []string) error {
 }
 
 func (app *App) setupFirewall() error {
-	var fw models.Firewall
+	var fw ftypes.Firewall
 	switch app.ctx.FirewallType {
-	case models.FirewallMock:
+	case ftypes.FirewallMock:
 		fw = mock.New(app.ctx.TimeNow)
-	case models.FirewallNFTables:
+	case ftypes.FirewallNFTables:
 		var err error
 		fw, err = nftables.New(app.ctx.Logger)
 		if err != nil {

@@ -7,8 +7,8 @@ import (
 
 	"github.com/alecthomas/kong"
 
+	"go.hackfix.me/sesame/app/config"
 	actx "go.hackfix.me/sesame/app/context"
-	"go.hackfix.me/sesame/models"
 )
 
 // CLI is the command line interface of Sesame.
@@ -97,7 +97,7 @@ func (c *CLI) Command() string {
 
 // ApplyConfig applies configuration values to the CLI, but only if they weren't
 // already set.
-func (c *CLI) ApplyConfig(cfg *models.Config) {
+func (c *CLI) ApplyConfig(cfg *config.Config) {
 	if c.Serve.Address == "" && cfg.Server.Address.Valid {
 		c.Serve.Address = cfg.Server.Address.V
 	}

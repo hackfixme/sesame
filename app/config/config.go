@@ -1,4 +1,4 @@
-package models
+package config
 
 import (
 	"database/sql"
@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/mandelsoft/vfs/pkg/vfs"
+
+	svc "go.hackfix.me/sesame/service"
 )
 
 // Config represents the application configuration, backed by a filesystem for
@@ -15,13 +17,13 @@ import (
 type Config struct {
 	fs       vfs.FileSystem
 	path     string
-	Server   ConfigServer
-	Services map[string]Service `json:"services"`
+	Server   Server
+	Services map[string]svc.Service `json:"services"`
 }
 
-// ConfigServer holds server-specific configuration options including
+// Server holds server-specific configuration options including
 // network address and TLS certificate settings.
-type ConfigServer struct {
+type Server struct {
 	Address     sql.Null[string] `json:"address"`
 	TLSCertFile sql.Null[string] `json:"tls_cert_file"`
 	TLSKeyFile  sql.Null[string] `json:"tls_key_file"`
@@ -139,17 +141,17 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 		c.Server.TLSKeyFile = sql.Null[string]{V: w.Server.TLSKeyFile, Valid: true}
 	}
 
-	c.Services = make(map[string]Service)
+	c.Services = make(map[string]svc.Service)
 
-	for name, svc := range w.Services {
-		maxDuration, err := time.ParseDuration(svc.MaxAccessDuration)
+	for name, s := range w.Services {
+		maxDuration, err := time.ParseDuration(s.MaxAccessDuration)
 		if err != nil {
 			return fmt.Errorf("invalid duration for service %s: %w", name, err)
 		}
 
-		c.Services[name] = Service{
+		c.Services[name] = svc.Service{
 			Name:              sql.Null[string]{V: name, Valid: true},
-			Port:              sql.Null[uint16]{V: svc.Port, Valid: true},
+			Port:              sql.Null[uint16]{V: s.Port, Valid: true},
 			MaxAccessDuration: sql.Null[time.Duration]{V: maxDuration, Valid: true},
 		}
 	}

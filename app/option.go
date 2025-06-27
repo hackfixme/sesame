@@ -9,15 +9,16 @@ import (
 	"github.com/lmittmann/tint"
 	"github.com/mandelsoft/vfs/pkg/vfs"
 
+	cfg "go.hackfix.me/sesame/app/config"
 	actx "go.hackfix.me/sesame/app/context"
-	"go.hackfix.me/sesame/models"
+	ftypes "go.hackfix.me/sesame/firewall/types"
 )
 
 // Option is a function that allows configuring the application.
 type Option func(*App)
 
 // WithConfig sets the configuration object.
-func WithConfig(cfg *models.Config) Option {
+func WithConfig(cfg *cfg.Config) Option {
 	return func(app *App) {
 		app.ctx.Config = cfg
 	}
@@ -47,7 +48,7 @@ func WithFDs(stdin io.Reader, stdout, stderr io.Writer) Option {
 }
 
 // WithFirewall sets the firewall implementation used by the application.
-func WithFirewall(ft models.FirewallType) Option {
+func WithFirewall(ft ftypes.FirewallType) Option {
 	return func(app *App) {
 		app.ctx.FirewallType = ft
 	}
