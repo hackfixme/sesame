@@ -12,9 +12,14 @@ import (
 	"github.com/mandelsoft/vfs/pkg/memoryfs"
 
 	actx "go.hackfix.me/sesame/app/context"
+	ftypes "go.hackfix.me/sesame/firewall/types"
 )
 
 var timeNow = time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+
+func timeNowFn() time.Time {
+	return timeNow
+}
 
 type testApp struct {
 	*App
@@ -32,12 +37,13 @@ func newTestApp(ctx context.Context, options ...Option) (*testApp, error) {
 
 	env := &mockEnv{env: map[string]string{}}
 	opts := []Option{
+		WithTimeNow(timeNowFn),
+		WithEnv(env),
 		WithContext(ctx),
 		WithFDs(stdinR, stdoutW, stderrW),
 		WithFS(memoryfs.New()),
 		WithLogger(false, false),
-		WithEnv(env),
-		WithTimeNow(func() time.Time { return timeNow }),
+		WithFirewall(ftypes.FirewallMock),
 	}
 	opts = append(opts, options...)
 	app, err := New("sesame", "/config.json", opts...)
