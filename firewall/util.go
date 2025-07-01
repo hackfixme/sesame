@@ -27,7 +27,7 @@ func ParseToIPSet(ipAddr ...string) (*netipx.IPSet, error) {
 		// Finally try a range
 		ipRange, err := netipx.ParseIPRange(ip)
 		if err != nil {
-			return nil, fmt.Errorf("failed parsing IP address '%s': %w", ipAddr, err)
+			return nil, fmt.Errorf("failed parsing IP address '%s': %w", ip, err)
 		}
 		b.AddRange(ipRange)
 	}
