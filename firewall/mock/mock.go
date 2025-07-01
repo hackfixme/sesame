@@ -44,7 +44,8 @@ func (m *Mock) Allow(ipRange netipx.IPRange, destPort uint16, duration time.Dura
 	ipStr := ipRange.String()
 	ports, ok := m.Allowed[ipStr]
 	if !ok {
-		m.Allowed[ipStr] = make(map[uint16]time.Time)
+		ports = make(map[uint16]time.Time)
+		m.Allowed[ipStr] = ports
 	}
 	ports[destPort] = m.timeNow().Add(duration)
 	return nil
