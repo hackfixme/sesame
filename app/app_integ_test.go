@@ -116,3 +116,200 @@ func TestAppOpen(t *testing.T) {
 		})
 	}
 }
+
+func TestAppService(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		args      []string
+		expStdout string
+		expStderr string
+		expErr    string
+		expConfig config.Config
+	}{
+		{
+			name: "ok/add_basic",
+			args: []string{"add", "web", "80"},
+			expConfig: config.Config{
+				Services: map[string]svc.Service{
+					"web": {
+						Name:              sql.Null[string]{V: "web", Valid: true},
+						Port:              sql.Null[uint16]{V: 80, Valid: true},
+						MaxAccessDuration: sql.Null[time.Duration]{V: time.Hour, Valid: true},
+					},
+				},
+			},
+		},
+		{
+			name: "ok/add_custom_access_duration",
+			args: []string{"add", "db", "5432", "--max-access-duration", "30m"},
+			expConfig: config.Config{
+				Services: map[string]svc.Service{
+					"web": {
+						Name:              sql.Null[string]{V: "web", Valid: true},
+						Port:              sql.Null[uint16]{V: 80, Valid: true},
+						MaxAccessDuration: sql.Null[time.Duration]{V: time.Hour, Valid: true},
+					},
+					"db": {
+						Name:              sql.Null[string]{V: "db", Valid: true},
+						Port:              sql.Null[uint16]{V: 5432, Valid: true},
+						MaxAccessDuration: sql.Null[time.Duration]{V: 30 * time.Minute, Valid: true},
+					},
+				},
+			},
+		},
+		{
+			name: "ok/update",
+			args: []string{"update", "web", "8080", "--max-access-duration", "5m"},
+			expConfig: config.Config{
+				Services: map[string]svc.Service{
+					"web": {
+						Name:              sql.Null[string]{V: "web", Valid: true},
+						Port:              sql.Null[uint16]{V: 8080, Valid: true},
+						MaxAccessDuration: sql.Null[time.Duration]{V: 5 * time.Minute, Valid: true},
+					},
+					"db": {
+						Name:              sql.Null[string]{V: "db", Valid: true},
+						Port:              sql.Null[uint16]{V: 5432, Valid: true},
+						MaxAccessDuration: sql.Null[time.Duration]{V: 30 * time.Minute, Valid: true},
+					},
+				},
+			},
+		},
+		{
+			name: "ok/list",
+			args: []string{"list"},
+			expConfig: config.Config{
+				Services: map[string]svc.Service{
+					"web": {
+						Name:              sql.Null[string]{V: "web", Valid: true},
+						Port:              sql.Null[uint16]{V: 8080, Valid: true},
+						MaxAccessDuration: sql.Null[time.Duration]{V: 5 * time.Minute, Valid: true},
+					},
+					"db": {
+						Name:              sql.Null[string]{V: "db", Valid: true},
+						Port:              sql.Null[uint16]{V: 5432, Valid: true},
+						MaxAccessDuration: sql.Null[time.Duration]{V: 30 * time.Minute, Valid: true},
+					},
+				},
+			},
+			expStdout: "" +
+				"Name  Port  Max Access Duration\n" +
+				"----  ----  -------------------\n" +
+				"db    5432  30m0s\n" +
+				"web   8080  5m0s\n",
+		},
+		{
+			name: "ok/remove_1",
+			args: []string{"remove", "web"},
+			expConfig: config.Config{
+				Services: map[string]svc.Service{
+					"db": {
+						Name:              sql.Null[string]{V: "db", Valid: true},
+						Port:              sql.Null[uint16]{V: 5432, Valid: true},
+						MaxAccessDuration: sql.Null[time.Duration]{V: 30 * time.Minute, Valid: true},
+					},
+				},
+			},
+		},
+		{
+			name: "err/invalid_port",
+			args: []string{"add", "web", "0"},
+			expConfig: config.Config{
+				Services: map[string]svc.Service{
+					"db": {
+						Name:              sql.Null[string]{V: "db", Valid: true},
+						Port:              sql.Null[uint16]{V: 5432, Valid: true},
+						MaxAccessDuration: sql.Null[time.Duration]{V: 30 * time.Minute, Valid: true},
+					},
+				},
+			},
+			expErr: "failed parsing CLI arguments: <port>: must be greater than 0",
+		},
+		{
+			name: "err/service_exists",
+			args: []string{"add", "db", "5000"},
+			expConfig: config.Config{
+				Services: map[string]svc.Service{
+					"db": {
+						Name:              sql.Null[string]{V: "db", Valid: true},
+						Port:              sql.Null[uint16]{V: 5432, Valid: true},
+						MaxAccessDuration: sql.Null[time.Duration]{V: 30 * time.Minute, Valid: true},
+					},
+				},
+			},
+			expErr: "service 'db' already exists",
+		},
+		{
+			name: "err/remove_service_doesnot_exist",
+			args: []string{"remove", "web"},
+			expConfig: config.Config{
+				Services: map[string]svc.Service{
+					"db": {
+						Name:              sql.Null[string]{V: "db", Valid: true},
+						Port:              sql.Null[uint16]{V: 5432, Valid: true},
+						MaxAccessDuration: sql.Null[time.Duration]{V: 30 * time.Minute, Valid: true},
+					},
+				},
+			},
+			expErr: "service 'web' doesn't exist",
+		},
+		{
+			name: "err/update_service_doesnot_exist",
+			args: []string{"update", "web", "5000"},
+			expConfig: config.Config{
+				Services: map[string]svc.Service{
+					"db": {
+						Name:              sql.Null[string]{V: "db", Valid: true},
+						Port:              sql.Null[uint16]{V: 5432, Valid: true},
+						MaxAccessDuration: sql.Null[time.Duration]{V: 30 * time.Minute, Valid: true},
+					},
+				},
+			},
+			expErr: "service 'web' doesn't exist",
+		},
+		{
+			name:      "ok/remove_2",
+			args:      []string{"remove", "db"},
+			expConfig: config.Config{Services: map[string]svc.Service{}},
+		},
+		{
+			name:      "ok/list_empty",
+			args:      []string{"list"},
+			expConfig: config.Config{Services: map[string]svc.Service{}},
+		},
+	}
+
+	tctx, cancel, h := newTestContext(t, 5*time.Second)
+	defer cancel()
+
+	app, err := newTestApp(tctx)
+	h(assert.NoError(t, err))
+
+	for _, tt := range tests {
+		args := []string{"service"}
+		t.Run(tt.name, func(t *testing.T) {
+			args = append(args, tt.args...)
+			err = app.Run(args...)
+			stdout := app.stdout.String()
+			stderr := app.stderr.String()
+
+			if tt.expErr != "" {
+				h(assert.ErrorContains(t, err, tt.expErr))
+			} else {
+				h(assert.NoError(t, err))
+			}
+
+			h(assert.Equal(t, tt.expStdout, stdout))
+			h(assert.Equal(t, tt.expStderr, stderr))
+
+			cfgJSON, err := vfs.ReadFile(app.ctx.FS, "/config.json")
+			h(assert.NoError(t, err))
+			var cfg config.Config
+			err = json.Unmarshal(cfgJSON, &cfg)
+			h(assert.NoError(t, err))
+			h(assert.Equal(t, tt.expConfig, cfg))
+		})
+	}
+}
