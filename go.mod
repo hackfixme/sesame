@@ -5,25 +5,38 @@ go 1.24.2
 require (
 	github.com/adrg/xdg v0.5.3
 	github.com/alecthomas/kong v1.10.0
+	github.com/glebarez/go-sqlite v1.22.0
 	github.com/google/nftables v0.3.0
 	github.com/lmittmann/tint v1.0.7
 	github.com/mandelsoft/vfs v0.4.4
 	github.com/mattn/go-colorable v0.1.14
 	github.com/mattn/go-isatty v0.0.20
+	github.com/mr-tron/base58 v1.2.0
+	github.com/nrednav/cuid2 v1.0.1
 	github.com/stretchr/testify v1.10.0
+	github.com/zpatrick/rbac v0.0.0-20180829190353-d2c4f050cf28
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
-	golang.org/x/sys v0.31.0
+	golang.org/x/crypto v0.39.0
+	golang.org/x/sys v0.33.0
 )
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
+	github.com/google/uuid v1.5.0 // indirect
 	github.com/mandelsoft/filepath v0.0.0-20240223090642-3e2777258aa3 // indirect
 	github.com/mdlayher/netlink v1.7.3-0.20250113171957-fbb4dce95f42 // indirect
 	github.com/mdlayher/socket v0.5.0 // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
+	github.com/ryanuber/go-glob v1.0.0 // indirect
 	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/sync v0.6.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	modernc.org/libc v1.37.6 // indirect
+	modernc.org/mathutil v1.6.0 // indirect
+	modernc.org/memory v1.7.2 // indirect
+	modernc.org/sqlite v1.28.0 // indirect
 )
