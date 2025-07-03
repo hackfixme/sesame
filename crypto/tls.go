@@ -18,7 +18,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"math/big"
@@ -40,15 +39,15 @@ func DefaultTLSConfig() *tls.Config {
 	}
 }
 
-// NewTLSCert creates a X.509 v3 certificate using the provided subjectName,
+// NewTLSCert creates an X.509 v3 certificate using the provided subjectName,
 // Subject Alternative Names and expiration date. If parent is nil, the
 // certificate is self-signed using a new Ed25519 private key; otherwise the
 // parent certificate is used to sign the new certificate (e.g. for client certs).
-// It returns the certificate and private key encoded in PEM format.
-// Source: https://eli.thegreenplace.net/2021/go-https-servers-with-tls/
+// It returns the certificate and private key.
+// Reference: https://eli.thegreenplace.net/2021/go-https-servers-with-tls/
 func NewTLSCert(
 	subjectName string, san []string, expiration time.Time, parent *tls.Certificate,
-) (certPEM, privateKeyPEM []byte, err error) {
+) (*x509.Certificate, ed25519.PrivateKey, error) {
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
@@ -73,7 +72,8 @@ func NewTLSCert(
 		KeyUsage: x509.KeyUsageKeyEncipherment |
 			x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
 		ExtKeyUsage: []x509.ExtKeyUsage{
-			x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+			x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth,
+		},
 		BasicConstraintsValid: true,
 	}
 
@@ -108,19 +108,10 @@ func NewTLSCert(
 		return nil, nil, fmt.Errorf("failed creating X.509 certificate: %w", certErr)
 	}
 
-	certPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-	if certPEM == nil {
-		return nil, nil, errors.New("failed encoding X.509 certificate to PEM")
-	}
-
-	privBytes, err := x509.MarshalPKCS8PrivateKey(privKey)
+	cert, err := x509.ParseCertificate(certDER)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed marshalling private key: %w", err)
-	}
-	privateKeyPEM = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes})
-	if privateKeyPEM == nil {
-		return nil, nil, errors.New("failed encoding private key to PEM")
+		return nil, nil, fmt.Errorf("failed parsing X.509 certificate from ASN.1 DER data: %w", certErr)
 	}
 
-	return certPEM, privateKeyPEM, nil
+	return cert, privKey, nil
 }
