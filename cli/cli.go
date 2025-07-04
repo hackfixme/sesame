@@ -16,6 +16,7 @@ type CLI struct {
 	kong *kong.Kong
 	kctx *kong.Context
 
+	Init    Init    `kong:"cmd,help='Create initial application artifacts.'"`
 	Open    Open    `kong:"cmd,help='Give clients access to services.'"`
 	Serve   Serve   `kong:"cmd,help='Start the web server.'"`
 	Service Service `kong:"cmd,help='Manage services.'"`
