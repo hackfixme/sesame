@@ -9,6 +9,7 @@ import (
 	"github.com/mandelsoft/vfs/pkg/vfs"
 
 	cfg "go.hackfix.me/sesame/app/config"
+	"go.hackfix.me/sesame/db"
 	ftypes "go.hackfix.me/sesame/firewall/types"
 )
 
@@ -21,16 +22,20 @@ type Context struct {
 	Env     Environment     // process environment
 	Logger  *slog.Logger    // global logger
 	TimeNow func() time.Time
-	Config  *cfg.Config // values read from the configuration file
+	Config  *cfg.Config   // values read from the configuration file
+	UUIDGen func() string // UUID generator
 
 	// Standard streams
 	Stdin  io.Reader
 	Stdout io.Writer
 	Stderr io.Writer
 
+	DB *db.DB
+
 	FirewallType    ftypes.FirewallType
 	FirewallManager ftypes.FirewallManager
 
 	// Metadata
-	Version *VersionInfo
+	Version     *VersionInfo
+	VersionInit string // app version the DB was initialized with
 }

@@ -11,6 +11,7 @@ import (
 
 	cfg "go.hackfix.me/sesame/app/config"
 	actx "go.hackfix.me/sesame/app/context"
+	"go.hackfix.me/sesame/db"
 	ftypes "go.hackfix.me/sesame/firewall/types"
 )
 
@@ -28,6 +29,13 @@ func WithConfig(cfg *cfg.Config) Option {
 func WithContext(ctx context.Context) Option {
 	return func(app *App) {
 		app.ctx.Ctx = ctx
+	}
+}
+
+// WithDB sets the Sesame database.
+func WithDB(d *db.DB) Option {
+	return func(app *App) {
+		app.ctx.DB = d
 	}
 }
 

@@ -4,13 +4,17 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 
 	"github.com/mandelsoft/vfs/pkg/memoryfs"
+	"github.com/nrednav/cuid2"
 
 	cfg "go.hackfix.me/sesame/app/config"
 	actx "go.hackfix.me/sesame/app/context"
 	aerrors "go.hackfix.me/sesame/app/errors"
 	"go.hackfix.me/sesame/cli"
+	"go.hackfix.me/sesame/db"
+	"go.hackfix.me/sesame/db/queries"
 	"go.hackfix.me/sesame/firewall"
 	"go.hackfix.me/sesame/firewall/mock"
 	"go.hackfix.me/sesame/firewall/nftables"
@@ -28,19 +32,23 @@ type App struct {
 	configFilePath string
 }
 
-// New initializes a new application.
-func New(name string, configFilePath string, opts ...Option) (*App, error) {
+// New initializes a new application with the given options.
+// configFilePath specifies the path to the configuration file. This can be overridden
+// with the SESAME_CONFIG_FILE environment variable, or the --config-file CLI flag.
+// dataDir specifies the path to the directory where application data will be stored.
+// This can be overridden with the SESAME_DATA_DIR environment variable, or the
+// --data-dir CLI flag.
+func New(name, configFilePath, dataDir string, opts ...Option) (*App, error) {
 	version, err := actx.GetVersion()
 	if err != nil {
 		return nil, err
 	}
 
 	defaultCtx := &actx.Context{
-		Ctx:     context.Background(),
-		FS:      memoryfs.New(),
-		Logger:  slog.Default(),
-		Version: version,
-
+		Ctx:          context.Background(),
+		FS:           memoryfs.New(),
+		Logger:       slog.Default(),
+		Version:      version,
 		FirewallType: ftypes.FirewallMock,
 	}
 	app := &App{
@@ -53,8 +61,15 @@ func New(name string, configFilePath string, opts ...Option) (*App, error) {
 		opt(app)
 	}
 
+	uuidgen, err := cuid2.Init(cuid2.WithLength(12))
+	if err != nil {
+		return nil, aerrors.NewRuntimeError(
+			"failed creating UUID generation function", err, "")
+	}
+	app.ctx.UUIDGen = uuidgen
+
 	ver := fmt.Sprintf("%s %s", app.name, app.ctx.Version.String())
-	app.cli, err = cli.New(configFilePath, ver)
+	app.cli, err = cli.New(configFilePath, dataDir, ver)
 	if err != nil {
 		return nil, err
 	}
@@ -87,8 +102,49 @@ func (app *App) Run(args []string) error {
 		return err
 	}
 
+	if err := app.createDataDir(app.cli.DataDir); err != nil {
+		return err
+	}
+	dataDir := app.cli.DataDir
+	if app.ctx.FS.Name() == "MemoryFileSystem" {
+		// The SQLite lib will attempt to write directly with the os interface,
+		// so prevent it by using SQLite's in-memory support.
+		dataDir = ":memory:"
+	}
+
+	if err := app.setupDB(dataDir); err != nil {
+		return err
+	}
+
 	if err := app.cli.Execute(app.ctx); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (app *App) createDataDir(dir string) error {
+	err := app.ctx.FS.MkdirAll(dir, 0o700)
+	if err != nil {
+		return aerrors.NewRuntimeError(
+			fmt.Sprintf("failed creating app data directory '%s'", dir), err, "")
+	}
+	return nil
+}
+
+func (app *App) setupDB(dataDir string) error {
+	var err error
+	if app.ctx.DB == nil {
+		dbPath := filepath.Join(dataDir, "sesame.db")
+		app.ctx.DB, err = db.Open(app.ctx.Ctx, dbPath)
+		if err != nil {
+			return err
+		}
+	}
+
+	version, _ := queries.Version(app.ctx.DB.NewContext(), app.ctx.DB)
+	if version.Valid {
+		app.ctx.VersionInit = version.V
 	}
 
 	return nil

@@ -26,12 +26,13 @@ type CLI struct {
 	// NOTE: I'm deliberately not using kong.ConfigFlag or its support for reading
 	// values from configuration files, since I want to manage configuration
 	// independently from the CLI.
-	ConfigFile string           `kong:"default='${configFile}',help='Path to the configuration file.'"`
+	ConfigFile string           `kong:"default='${configFile}',help='Path to the Sesame configuration file.'"`
+	DataDir    string           `kong:"default='${dataDir}',help='Path to the directory where Sesame data is stored.'"`
 	Version    kong.VersionFlag `kong:"help='Output version and exit.'"`
 }
 
 // New initializes the command-line interface.
-func New(configFilePath, version string) (*CLI, error) {
+func New(configFilePath, dataDir, version string) (*CLI, error) {
 	c := &CLI{}
 	kparser, err := kong.New(c,
 		kong.Name("sesame"),
@@ -44,6 +45,7 @@ func New(configFilePath, version string) (*CLI, error) {
 		}),
 		kong.Vars{
 			"configFile": configFilePath,
+			"dataDir":    dataDir,
 			"version":    version,
 		},
 	)

@@ -20,6 +20,7 @@ import (
 func main() {
 	a, err := app.New("sesame",
 		filepath.Join(xdg.ConfigHome, "sesame", "config.json"),
+		filepath.Join(xdg.DataHome, "sesame"),
 		app.WithTimeNow(time.Now),
 		app.WithEnv(osEnv{}),
 		app.WithFDs(

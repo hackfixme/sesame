@@ -3,6 +3,8 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"fmt"
 	"io"
 	"regexp"
 	"sync"
@@ -12,6 +14,7 @@ import (
 	"github.com/mandelsoft/vfs/pkg/memoryfs"
 
 	actx "go.hackfix.me/sesame/app/context"
+	"go.hackfix.me/sesame/db"
 	ftypes "go.hackfix.me/sesame/firewall/types"
 )
 
@@ -30,6 +33,21 @@ type testApp struct {
 }
 
 func newTestApp(ctx context.Context, options ...Option) (*testApp, error) {
+	// A unique name per app, to avoid clashing of in-memory SQLite DBs.
+	rndName := make([]byte, 12)
+	_, err := rand.Read(rndName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Not using just :memory: to avoid 'no such table' issue.
+	// See https://github.com/mattn/go-sqlite3#faq
+	d, err := db.Open(ctx,
+		fmt.Sprintf("file:sesame-%x?mode=memory&cache=shared", rndName))
+	if err != nil {
+		return nil, err
+	}
+
 	var (
 		stdinR, stdinW   = io.Pipe()
 		stdoutW, stderrW = newHookWriter(ctx), newHookWriter(ctx)
@@ -39,6 +57,7 @@ func newTestApp(ctx context.Context, options ...Option) (*testApp, error) {
 	opts := []Option{
 		WithTimeNow(timeNowFn),
 		WithEnv(env),
+		WithDB(d),
 		WithContext(ctx),
 		WithFDs(stdinR, stdoutW, stderrW),
 		WithFS(memoryfs.New()),
@@ -46,7 +65,7 @@ func newTestApp(ctx context.Context, options ...Option) (*testApp, error) {
 		WithFirewall(ftypes.FirewallMock),
 	}
 	opts = append(opts, options...)
-	app, err := New("sesame", "/config.json", opts...)
+	app, err := New("sesame", "/config.json", "/data", opts...)
 	if err != nil {
 		return nil, err
 	}

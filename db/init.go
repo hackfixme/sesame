@@ -4,51 +4,14 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"log/slog"
 
 	"github.com/mr-tron/base58"
+	"golang.org/x/crypto/nacl/box"
+
 	"go.hackfix.me/sesame/crypto"
-	"go.hackfix.me/sesame/db/migrator"
 	"go.hackfix.me/sesame/db/models"
 	"go.hackfix.me/sesame/db/types"
-	"golang.org/x/crypto/nacl/box"
 )
-
-// Init creates the database schema and initial records.
-func (d *DB) Init(
-	appVersion string, serverTLSCert, serverTLSKey []byte, serverTLSSAN string,
-	logger *slog.Logger,
-) (localUser *models.User, err error) {
-	err = migrator.RunMigrations(d, d.migrations, migrator.MigrationUp, "all", logger)
-	if err != nil {
-		return nil, err
-	}
-
-	dbCtx := d.NewContext()
-	roles, err := createRoles(dbCtx, d)
-	if err != nil {
-		return nil, err
-	}
-
-	localUser, err = createLocalUser(dbCtx, d, roles["admin"])
-	if err != nil {
-		return nil, err
-	}
-
-	serverTLSKeyEnc, err := crypto.EncryptSymInMemory(serverTLSKey, localUser.PrivateKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed encrypting TLS private key: %w", err)
-	}
-
-	_, err = d.ExecContext(dbCtx,
-		`INSERT INTO _meta (version, server_tls_cert, server_tls_key_enc, server_tls_san)
-		VALUES (?, ?, ?, ?)`, appVersion, serverTLSCert, serverTLSKeyEnc, serverTLSSAN)
-	if err != nil {
-		return nil, err
-	}
-
-	return localUser, nil
-}
 
 func createRoles(ctx context.Context, d types.Querier) (map[string]*models.Role, error) {
 	roles := []*models.Role{

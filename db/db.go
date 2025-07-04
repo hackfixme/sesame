@@ -5,8 +5,13 @@ import (
 	"database/sql"
 	"embed"
 	"io/fs"
+	"log/slog"
+	"math"
+	"strings"
+	"time"
 
 	_ "github.com/glebarez/go-sqlite"
+
 	"go.hackfix.me/sesame/db/migrator"
 	"go.hackfix.me/sesame/db/types"
 )
@@ -22,13 +27,57 @@ type DB struct {
 
 var _ types.Querier = &DB{}
 
+// Init creates the database schema and initial records.
+func (d *DB) Init(
+	appVersion string, serverTLSCert, serverTLSKey []byte, serverTLSSAN string,
+	logger *slog.Logger,
+) error {
+	err := migrator.RunMigrations(d, d.migrations, migrator.MigrationUp, "all", logger)
+	if err != nil {
+		return err
+	}
+
+	_, err = d.ExecContext(d.NewContext(),
+		`INSERT INTO _meta (version, server_tls_cert, server_tls_key, server_tls_san)
+		VALUES (?, ?, ?, ?)`, appVersion, serverTLSCert, serverTLSKey, serverTLSSAN)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// NewContext returns a new child context of the main database context.
+func (d *DB) NewContext() context.Context {
+	// TODO: Return cancel func?
+	ctx, _ := context.WithCancel(d.ctx)
+	return ctx
+}
+
 func Open(ctx context.Context, path string) (*DB, error) {
+	var d *DB
+	if strings.Contains(path, "mode=memory") || strings.Contains(path, ":memory:") {
+		defer func() {
+			if d != nil {
+				// See https://github.com/mattn/go-sqlite3#faq
+				d.SetMaxIdleConns(10)
+				d.SetConnMaxLifetime(time.Duration(math.Inf(1)))
+			}
+		}()
+	}
+
 	sqliteDB, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, err
 	}
 
-	d := &DB{DB: sqliteDB, ctx: ctx}
+	d = &DB{DB: sqliteDB, ctx: ctx}
+
+	// Enable foreign key enforcement
+	_, err = d.Exec(`PRAGMA foreign_keys = ON;`)
+	if err != nil {
+		return nil, err
+	}
 
 	migrationsDir, err := fs.Sub(migrationsFS, "migrations")
 	if err != nil {
@@ -41,11 +90,4 @@ func Open(ctx context.Context, path string) (*DB, error) {
 	d.migrations = migrations
 
 	return d, nil
-}
-
-// NewContext returns a new child context of the main database context.
-func (d *DB) NewContext() context.Context {
-	// TODO: Return cancel func?
-	ctx, _ := context.WithCancel(d.ctx)
-	return ctx
 }
