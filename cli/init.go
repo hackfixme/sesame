@@ -10,19 +10,52 @@ import (
 	actx "go.hackfix.me/sesame/app/context"
 	aerrors "go.hackfix.me/sesame/app/errors"
 	"go.hackfix.me/sesame/crypto"
+	"go.hackfix.me/sesame/firewall"
+	ftypes "go.hackfix.me/sesame/firewall/types"
 )
 
 // The Init command creates initial Sesame artifacts, such as firewall rules,
 // the API server TLS key and certificate, and the Sesame database.
-type Init struct{}
+type Init struct {
+	FirewallType ftypes.FirewallType `help:"The firewall to initialize. Valid values: nftables"`
+}
 
 // Run the init command.
 func (c *Init) Run(appCtx *actx.Context) error {
 	if appCtx.VersionInit != "" {
-		// TODO: Add --force option?
-		return fmt.Errorf("Sesame is already initialized with version %s", appCtx.VersionInit)
+		appCtx.Logger.Warn("The Sesame database is already initialized, skipping", "version", appCtx.VersionInit)
+	} else {
+		if err := initDB(appCtx); err != nil {
+			return aerrors.NewRuntimeError("failed initializing database", err, "")
+		}
 	}
 
+	if c.FirewallType != "" { //nolint:nestif // Meh, it's fine.
+		if appCtx.Config.Firewall.Type.Valid {
+			appCtx.Logger.Warn("A firewall is already initialized, skipping", "type", appCtx.Config.Firewall.Type.V)
+		} else {
+			fw, _, err := firewall.Setup(appCtx, c.FirewallType)
+			if err != nil {
+				return err
+			}
+
+			if err = fw.Init(); err != nil {
+				return err
+			}
+
+			appCtx.Config.Firewall.Type.V = c.FirewallType
+			appCtx.Config.Firewall.Type.Valid = true
+		}
+	}
+
+	if err := appCtx.Config.Save(); err != nil {
+		return aerrors.NewRuntimeError("failed saving configuration", err, "")
+	}
+
+	return nil
+}
+
+func initDB(appCtx *actx.Context) error {
 	rndSANb := make([]byte, 16)
 	_, err := rand.Read(rndSANb)
 	if err != nil {
@@ -39,11 +72,8 @@ func (c *Init) Run(appCtx *actx.Context) error {
 
 	err = appCtx.DB.Init(appCtx.Version.Semantic, tlsCert.Raw, tlsPrivKey, rndSAN, appCtx.Logger)
 	if err != nil {
-		return aerrors.NewRuntimeError("failed initializing database", err, "")
+		return err
 	}
-
-	// TODO: Initialize the firewall here as well. Essentially Firewall.Setup
-	// should be renamed to Firewall.Init, and only run here instead of in NewManager.
 
 	return nil
 }

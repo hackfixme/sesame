@@ -22,6 +22,7 @@ var migrationsFS embed.FS
 type DB struct {
 	*sql.DB
 	ctx        context.Context
+	path       string
 	migrations []*migrator.Migration
 }
 
@@ -32,6 +33,9 @@ func (d *DB) Init(
 	appVersion string, serverTLSCert, serverTLSKey []byte, serverTLSSAN string,
 	logger *slog.Logger,
 ) error {
+	dblogger := logger.With("path", d.path)
+	dblogger.Debug("initializing database")
+
 	err := migrator.RunMigrations(d, d.migrations, migrator.MigrationUp, "all", logger)
 	if err != nil {
 		return err
@@ -43,6 +47,8 @@ func (d *DB) Init(
 	if err != nil {
 		return err
 	}
+
+	dblogger.Info("database initialized")
 
 	return nil
 }
@@ -71,7 +77,7 @@ func Open(ctx context.Context, path string) (*DB, error) {
 		return nil, err
 	}
 
-	d = &DB{DB: sqliteDB, ctx: ctx}
+	d = &DB{DB: sqliteDB, ctx: ctx, path: path}
 
 	// Enable foreign key enforcement
 	_, err = d.Exec(`PRAGMA foreign_keys = ON;`)

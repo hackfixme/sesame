@@ -15,10 +15,6 @@ import (
 	"go.hackfix.me/sesame/cli"
 	"go.hackfix.me/sesame/db"
 	"go.hackfix.me/sesame/db/queries"
-	"go.hackfix.me/sesame/firewall"
-	"go.hackfix.me/sesame/firewall/mock"
-	"go.hackfix.me/sesame/firewall/nftables"
-	ftypes "go.hackfix.me/sesame/firewall/types"
 )
 
 // App is the application.
@@ -45,11 +41,10 @@ func New(name, configFilePath, dataDir string, opts ...Option) (*App, error) {
 	}
 
 	defaultCtx := &actx.Context{
-		Ctx:          context.Background(),
-		FS:           memoryfs.New(),
-		Logger:       slog.Default(),
-		Version:      version,
-		FirewallType: ftypes.FirewallMock,
+		Ctx:     context.Background(),
+		FS:      memoryfs.New(),
+		Logger:  slog.Default(),
+		Version: version,
 	}
 	app := &App{
 		name:           name,
@@ -98,10 +93,6 @@ func (app *App) Run(args []string) error {
 
 	app.cli.ApplyConfig(app.ctx.Config)
 
-	if err := app.setupFirewall(); err != nil {
-		return err
-	}
-
 	if err := app.createDataDir(app.cli.DataDir); err != nil {
 		return err
 	}
@@ -145,31 +136,6 @@ func (app *App) setupDB(dataDir string) error {
 	version, _ := queries.Version(app.ctx.DB.NewContext(), app.ctx.DB)
 	if version.Valid {
 		app.ctx.VersionInit = version.V
-	}
-
-	return nil
-}
-
-func (app *App) setupFirewall() error {
-	var fw ftypes.Firewall
-	switch app.ctx.FirewallType {
-	case ftypes.FirewallMock:
-		fw = mock.New(app.ctx.TimeNow)
-	case ftypes.FirewallNFTables:
-		var err error
-		fw, err = nftables.New(app.ctx.Logger)
-		if err != nil {
-			return aerrors.NewRuntimeError("failed creating the nftables firewall", err, "")
-		}
-	}
-
-	var err error
-	app.ctx.FirewallManager, err = firewall.NewManager(
-		fw, app.ctx.Config.Services,
-		firewall.WithLogger(app.ctx.Logger),
-	)
-	if err != nil {
-		return aerrors.NewRuntimeError("failed creating the firewall manager", err, "")
 	}
 
 	return nil

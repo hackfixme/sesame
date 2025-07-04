@@ -28,9 +28,9 @@ func New(timeNow func() time.Time) *Mock {
 	}
 }
 
-// Setup performs any necessary initialization for the firewall.
+// Init performs any necessary initialization for the firewall.
 // Returns the configured failure error if one is set.
-func (m *Mock) Setup() error {
+func (m *Mock) Init() error {
 	return m.failErr
 }
 

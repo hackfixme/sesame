@@ -9,24 +9,19 @@ import (
 
 	"github.com/mandelsoft/vfs/pkg/vfs"
 
+	ftypes "go.hackfix.me/sesame/firewall/types"
 	svc "go.hackfix.me/sesame/service"
 )
 
 // Config represents the application configuration, backed by a filesystem for
 // persistence.
 type Config struct {
-	fs       vfs.FileSystem
-	path     string
+	Firewall Firewall
 	Server   Server
-	Services map[string]svc.Service `json:"services"`
-}
+	Services map[string]svc.Service
 
-// Server holds server-specific configuration options including
-// network address and TLS certificate settings.
-type Server struct {
-	Address     sql.Null[string] `json:"address"`
-	TLSCertFile sql.Null[string] `json:"tls_cert_file"`
-	TLSKeyFile  sql.Null[string] `json:"tls_key_file"`
+	fs   vfs.FileSystem
+	path string
 }
 
 // NewConfig creates a new Config instance with the specified filesystem
@@ -80,9 +75,25 @@ func (c *Config) Save() error {
 	return nil
 }
 
+// Server holds server-specific configuration options.
+type Server struct {
+	Address     sql.Null[string] `json:"address"`
+	TLSCertFile sql.Null[string] `json:"tls_cert_file"`
+	TLSKeyFile  sql.Null[string] `json:"tls_key_file"`
+}
+
+// Firewall holds firewall-specific configuration options.
+type Firewall struct {
+	Type sql.Null[ftypes.FirewallType] `json:"type"`
+}
+
 type cfgWrapper struct {
+	Firewall fwCfgWrapper          `json:"firewall"`
 	Server   srvCfgWrapper         `json:"server"`
 	Services map[string]svcWrapper `json:"services"`
+}
+type fwCfgWrapper struct {
+	Type string `json:"type,omitempty"`
 }
 type srvCfgWrapper struct {
 	Address     string `json:"address,omitempty"`
@@ -99,6 +110,10 @@ type svcWrapper struct {
 func (c Config) MarshalJSON() ([]byte, error) {
 	w := cfgWrapper{
 		Services: make(map[string]svcWrapper),
+	}
+
+	if c.Firewall.Type.Valid {
+		w.Firewall.Type = string(c.Firewall.Type.V)
 	}
 
 	if c.Server.Address.Valid {
@@ -129,6 +144,14 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &w); err != nil {
 		//nolint:wrapcheck // This is fine.
 		return err
+	}
+
+	if w.Firewall.Type != "" {
+		ft, err := ftypes.FirewallTypeFromString(w.Firewall.Type)
+		if err != nil {
+			return err
+		}
+		c.Firewall.Type = sql.Null[ftypes.FirewallType]{V: ft, Valid: true}
 	}
 
 	if w.Server.Address != "" {

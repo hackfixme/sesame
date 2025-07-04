@@ -7,21 +7,22 @@ import (
 
 	"go4.org/netipx"
 
-	"go.hackfix.me/sesame/firewall/types"
+	actx "go.hackfix.me/sesame/app/context"
+	"go.hackfix.me/sesame/firewall/mock"
+	"go.hackfix.me/sesame/firewall/nftables"
+	ftypes "go.hackfix.me/sesame/firewall/types"
 	svc "go.hackfix.me/sesame/service"
 )
 
 // Manager manages access of client IPs to services.
 type Manager struct {
 	services map[string]svc.Service
-	firewall types.Firewall
+	firewall ftypes.Firewall
 	logger   *slog.Logger
 }
 
-var _ types.FirewallManager = (*Manager)(nil)
-
 // NewManager returns a new Manager instance.
-func NewManager(firewall types.Firewall, services map[string]svc.Service, opts ...Option) (*Manager, error) {
+func NewManager(firewall ftypes.Firewall, services map[string]svc.Service, opts ...Option) (*Manager, error) {
 	if firewall == nil {
 		return nil, fmt.Errorf("firewall implementation is required")
 	}
@@ -36,10 +37,6 @@ func NewManager(firewall types.Firewall, services map[string]svc.Service, opts .
 		if err := opt(m); err != nil {
 			return nil, err
 		}
-	}
-
-	if err := m.firewall.Setup(); err != nil {
-		return nil, fmt.Errorf("firewall setup failed: %w", err)
 	}
 
 	return m, nil
@@ -79,4 +76,37 @@ func (m *Manager) AllowAccess(ipSet *netipx.IPSet, serviceName string, duration 
 	}
 
 	return nil
+}
+
+// Setup creates a new Firewall with the given type and a Manager for it that
+// uses configured services.
+//
+//nolint:ireturn // Intentional, this is a generic function.
+func Setup(appCtx *actx.Context, ft ftypes.FirewallType) (ftypes.Firewall, *Manager, error) {
+	var (
+		fw  ftypes.Firewall
+		err error
+	)
+	switch ft {
+	case ftypes.FirewallMock:
+		fw = mock.New(appCtx.TimeNow)
+	case ftypes.FirewallNFTables:
+		fw, err = nftables.New(appCtx.Logger)
+	default:
+		return nil, nil, fmt.Errorf("unsupported firewall type '%s'", ft)
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed creating %s firewall: %w", ft, err)
+	}
+
+	var fwMgr *Manager
+	fwMgr, err = NewManager(
+		fw, appCtx.Config.Services,
+		WithLogger(appCtx.Logger),
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed creating the firewall manager: %w", err)
+	}
+
+	return fw, fwMgr, nil
 }

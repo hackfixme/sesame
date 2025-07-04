@@ -33,11 +33,6 @@ func TestNewManager(t *testing.T) {
 			firewall: nil,
 			expErr:   "firewall implementation is required",
 		},
-		{
-			name:     "err/firewall_setup_fail",
-			firewall: setupFailingMock(),
-			expErr:   "firewall setup failed: setup error",
-		},
 	}
 
 	for _, tt := range tests {
@@ -181,12 +176,6 @@ func TestManager_AllowAccess(t *testing.T) {
 			}
 		})
 	}
-}
-
-func setupFailingMock() *mock.Mock {
-	m := mock.New(time.Now)
-	m.SetFailError(errors.New("setup error"))
-	return m
 }
 
 var timeNow = time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)

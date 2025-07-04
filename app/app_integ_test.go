@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"go.hackfix.me/sesame/app/config"
+	ftypes "go.hackfix.me/sesame/firewall/types"
 	svc "go.hackfix.me/sesame/service"
 )
 
@@ -29,7 +30,18 @@ func TestAppOpen(t *testing.T) {
 			MaxAccessDuration: sql.Null[time.Duration]{V: 30 * time.Minute, Valid: true},
 		},
 	}
-	cfgOK := config.Config{Services: services}
+	cfgOK := config.Config{
+		Firewall: config.Firewall{
+			Type: sql.Null[ftypes.FirewallType]{V: ftypes.FirewallMock, Valid: true},
+		},
+		Services: services,
+	}
+
+	cfgNoServices := config.Config{
+		Firewall: config.Firewall{
+			Type: sql.Null[ftypes.FirewallType]{V: ftypes.FirewallMock, Valid: true},
+		},
+	}
 
 	tests := []struct {
 		name           string
@@ -57,18 +69,21 @@ func TestAppOpen(t *testing.T) {
 		},
 		{
 			name:    "err/no_clients",
+			config:  cfgNoServices,
 			svcName: "web",
 			clients: []string{},
 			expErr:  `failed parsing CLI arguments: expected "<clients> ..."`,
 		},
 		{
 			name:    "err/invalid_client",
+			config:  cfgNoServices,
 			svcName: "web",
 			clients: []string{"not.an.ip"},
 			expErr:  "failed parsing IP address 'not.an.ip'",
 		},
 		{
 			name:    "err/unknown_service",
+			config:  cfgNoServices,
 			svcName: "web",
 			clients: []string{"192.168.1.1"},
 			expErr:  "unknown service: web",

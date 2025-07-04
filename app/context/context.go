@@ -10,7 +10,6 @@ import (
 
 	cfg "go.hackfix.me/sesame/app/config"
 	"go.hackfix.me/sesame/db"
-	ftypes "go.hackfix.me/sesame/firewall/types"
 )
 
 // Context contains common objects used by the application. It is passed around
@@ -31,9 +30,6 @@ type Context struct {
 	Stderr io.Writer
 
 	DB *db.DB
-
-	FirewallType    ftypes.FirewallType
-	FirewallManager ftypes.FirewallManager
 
 	// Metadata
 	Version     *VersionInfo

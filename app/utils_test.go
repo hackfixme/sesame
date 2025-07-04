@@ -15,7 +15,6 @@ import (
 
 	actx "go.hackfix.me/sesame/app/context"
 	"go.hackfix.me/sesame/db"
-	ftypes "go.hackfix.me/sesame/firewall/types"
 )
 
 var timeNow = time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -62,7 +61,6 @@ func newTestApp(ctx context.Context, options ...Option) (*testApp, error) {
 		WithFDs(stdinR, stdoutW, stderrW),
 		WithFS(memoryfs.New()),
 		WithLogger(false, false),
-		WithFirewall(ftypes.FirewallMock),
 	}
 	opts = append(opts, options...)
 	app, err := New("sesame", "/config.json", "/data", opts...)

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	actx "go.hackfix.me/sesame/app/context"
+	aerrors "go.hackfix.me/sesame/app/errors"
 	"go.hackfix.me/sesame/firewall"
 )
 
@@ -17,12 +18,22 @@ type Open struct {
 
 // Run the open command.
 func (c *Open) Run(appCtx *actx.Context) error {
+	if !appCtx.Config.Firewall.Type.Valid {
+		return aerrors.NewRuntimeError(
+			"no firewall was configured on this system", nil, "Did you forget to run 'sesame init'?")
+	}
+
 	ipSet, err := firewall.ParseToIPSet(c.Clients...)
 	if err != nil {
 		return err
 	}
 
-	err = appCtx.FirewallManager.AllowAccess(ipSet, c.ServiceName, c.AccessDuration)
+	_, fwMgr, err := firewall.Setup(appCtx, appCtx.Config.Firewall.Type.V)
+	if err != nil {
+		return err
+	}
+
+	err = fwMgr.AllowAccess(ipSet, c.ServiceName, c.AccessDuration)
 	if err != nil {
 		return err
 	}

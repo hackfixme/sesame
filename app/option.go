@@ -12,7 +12,6 @@ import (
 	cfg "go.hackfix.me/sesame/app/config"
 	actx "go.hackfix.me/sesame/app/context"
 	"go.hackfix.me/sesame/db"
-	ftypes "go.hackfix.me/sesame/firewall/types"
 )
 
 // Option is a function that allows configuring the application.
@@ -52,13 +51,6 @@ func WithFDs(stdin io.Reader, stdout, stderr io.Writer) Option {
 		app.ctx.Stdin = stdin
 		app.ctx.Stdout = stdout
 		app.ctx.Stderr = stderr
-	}
-}
-
-// WithFirewall sets the firewall implementation used by the application.
-func WithFirewall(ft ftypes.FirewallType) Option {
-	return func(app *App) {
-		app.ctx.FirewallType = ft
 	}
 }
 

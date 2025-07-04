@@ -44,18 +44,36 @@ func New(logger *slog.Logger) (*NFTables, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed establishing netlink connection: %w", err)
 	}
-	// Smoke test for permission errors
-	if _, err = conn.ListTables(); err != nil {
-		return nil, fmt.Errorf("failed listing tables: %w", err)
-	}
-	return &NFTables{
+
+	nft := &NFTables{
 		conn:    conn,
 		allowed: make(map[int]*gnft.Set),
-		logger:  logger.With("component", "nftables"),
-	}, nil
+		logger:  logger.With("type", "nftables"),
+	}
+
+	// Try getting the existing table and named sets if they exist. Otherwise
+	// assume they will be created by Init.
+	nft.table, err = conn.ListTableOfFamily(tableName, gnft.TableFamilyINet)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("failed getting table %s: %w", tableName, err)
+	}
+
+	if nft.table != nil {
+		nft.allowed[32], err = conn.GetSetByName(nft.table, setAllowed4Name)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("failed getting set '%s': %w", setAllowed4Name, err)
+		}
+
+		nft.allowed[128], err = conn.GetSetByName(nft.table, setAllowed6Name)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("failed getting set '%s': %w", setAllowed6Name, err)
+		}
+	}
+
+	return nft, nil
 }
 
-// Setup initializes the firewall by creating the nftables ruleset. It is
+// Init initializes the firewall by creating the nftables ruleset. It is
 // idempotent, and won't recreate objects if they already exist.
 //
 // It creates the following ruleset:
@@ -83,7 +101,7 @@ func New(logger *slog.Logger) (*NFTables, error) {
 //	}
 //
 //nolint:funlen // This is easier to understand as a single long function.
-func (n *NFTables) Setup() (err error) {
+func (n *NFTables) Init() (err error) {
 	var init bool
 	defer func() {
 		if err == nil {
