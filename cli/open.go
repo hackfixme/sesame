@@ -28,7 +28,9 @@ func (c *Open) Run(appCtx *actx.Context) error {
 		return err
 	}
 
-	_, fwMgr, err := firewall.Setup(appCtx, appCtx.Config.Firewall.Type.V)
+	_, fwMgr, err := firewall.Setup(
+		appCtx, appCtx.Config.Firewall.Type.V, appCtx.Config.Firewall.DefaultAccessDuration.V,
+	)
 	if err != nil {
 		return err
 	}

@@ -84,7 +84,8 @@ type Server struct {
 
 // Firewall holds firewall-specific configuration options.
 type Firewall struct {
-	Type sql.Null[ftypes.FirewallType] `json:"type"`
+	Type                  sql.Null[ftypes.FirewallType] `json:"type"`
+	DefaultAccessDuration sql.Null[time.Duration]       `json:"default_access_duration"`
 }
 
 type cfgWrapper struct {
@@ -93,7 +94,8 @@ type cfgWrapper struct {
 	Services map[string]svcWrapper `json:"services"`
 }
 type fwCfgWrapper struct {
-	Type string `json:"type,omitempty"`
+	Type                  string `json:"type,omitempty"`
+	DefaultAccessDuration string `json:"default_access_duration,omitempty"`
 }
 type srvCfgWrapper struct {
 	Address     string `json:"address,omitempty"`
@@ -114,6 +116,9 @@ func (c Config) MarshalJSON() ([]byte, error) {
 
 	if c.Firewall.Type.Valid {
 		w.Firewall.Type = string(c.Firewall.Type.V)
+	}
+	if c.Firewall.DefaultAccessDuration.Valid {
+		w.Firewall.DefaultAccessDuration = c.Firewall.DefaultAccessDuration.V.String()
 	}
 
 	if c.Server.Address.Valid {
@@ -152,6 +157,13 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		c.Firewall.Type = sql.Null[ftypes.FirewallType]{V: ft, Valid: true}
+	}
+	if w.Firewall.DefaultAccessDuration != "" {
+		dur, err := time.ParseDuration(w.Firewall.DefaultAccessDuration)
+		if err != nil {
+			return fmt.Errorf("failed parsing default access duration: %w", err)
+		}
+		c.Firewall.DefaultAccessDuration = sql.Null[time.Duration]{V: dur, Valid: true}
 	}
 
 	if w.Server.Address != "" {

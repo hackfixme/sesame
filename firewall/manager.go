@@ -16,9 +16,10 @@ import (
 
 // Manager manages access of client IPs to services.
 type Manager struct {
-	services map[string]svc.Service
-	firewall ftypes.Firewall
-	logger   *slog.Logger
+	services              map[string]svc.Service
+	firewall              ftypes.Firewall
+	defaultAccessDuration time.Duration
+	logger                *slog.Logger
 }
 
 // NewManager returns a new Manager instance.
@@ -56,11 +57,14 @@ func (m *Manager) AllowAccess(ipSet *netipx.IPSet, serviceName string, duration 
 	)
 
 	if duration > svc.MaxAccessDuration.V {
-		logger.Debug("limiting access duration to configured service max",
+		logger.Warn("requested duration exceeds configured service max; clamping to max",
 			"requested_duration", duration,
 			"service_max", svc.MaxAccessDuration.V,
 		)
 		duration = min(duration, svc.MaxAccessDuration.V)
+	}
+	if duration == 0 {
+		duration = m.defaultAccessDuration
 	}
 
 	logger = logger.With("duration", duration)
@@ -82,7 +86,9 @@ func (m *Manager) AllowAccess(ipSet *netipx.IPSet, serviceName string, duration 
 // uses configured services.
 //
 //nolint:ireturn // Intentional, this is a generic function.
-func Setup(appCtx *actx.Context, ft ftypes.FirewallType) (ftypes.Firewall, *Manager, error) {
+func Setup(
+	appCtx *actx.Context, ft ftypes.FirewallType, defaultAccessDuration time.Duration,
+) (ftypes.Firewall, *Manager, error) {
 	var (
 		fw  ftypes.Firewall
 		err error
@@ -91,7 +97,7 @@ func Setup(appCtx *actx.Context, ft ftypes.FirewallType) (ftypes.Firewall, *Mana
 	case ftypes.FirewallMock:
 		fw = mock.New(appCtx.TimeNow)
 	case ftypes.FirewallNFTables:
-		fw, err = nftables.New(appCtx.Logger)
+		fw, err = nftables.New(defaultAccessDuration, appCtx.Logger)
 	default:
 		return nil, nil, fmt.Errorf("unsupported firewall type '%s'", ft)
 	}

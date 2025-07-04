@@ -19,11 +19,10 @@ import (
 )
 
 const (
-	tableName         = "sesame"
-	chainName         = "input"
-	setAllowed4Name   = "allowed_clients"
-	setAllowed6Name   = "allowed_clients6"
-	defaultSetTimeout = 5 * time.Minute
+	tableName       = "sesame"
+	chainName       = "input"
+	setAllowed4Name = "allowed_clients"
+	setAllowed6Name = "allowed_clients6"
 )
 
 // NFTables is an abstraction over the Linux nftables firewall.
@@ -31,24 +30,26 @@ type NFTables struct {
 	conn  *gnft.Conn
 	table *gnft.Table
 	// IPv4/6 sets for allowed source address and destination port pairs.
-	allowed map[int]*gnft.Set
-	logger  *slog.Logger
+	allowed               map[int]*gnft.Set
+	defaultAccessDuration time.Duration
+	logger                *slog.Logger
 }
 
 var _ ftypes.Firewall = (*NFTables)(nil)
 
 // New returns a new NFTables instance. It returns an error if the netlink
 // connection to the kernel fails.
-func New(logger *slog.Logger) (*NFTables, error) {
+func New(defaultAccessDuration time.Duration, logger *slog.Logger) (*NFTables, error) {
 	conn, err := gnft.New()
 	if err != nil {
 		return nil, fmt.Errorf("failed establishing netlink connection: %w", err)
 	}
 
 	nft := &NFTables{
-		conn:    conn,
-		allowed: make(map[int]*gnft.Set),
-		logger:  logger.With("type", "nftables"),
+		conn:                  conn,
+		allowed:               make(map[int]*gnft.Set),
+		defaultAccessDuration: defaultAccessDuration,
+		logger:                logger.With("type", "nftables"),
 	}
 
 	// Try getting the existing table and named sets if they exist. Otherwise
@@ -142,7 +143,7 @@ func (n *NFTables) Init() (err error) {
 			Concatenation: true,
 			Interval:      true,
 			HasTimeout:    true,
-			Timeout:       defaultSetTimeout,
+			Timeout:       n.defaultAccessDuration,
 		}
 		if err = n.conn.AddSet(n.allowed[32], nil); err != nil {
 			return fmt.Errorf("failed adding set '%s': %w", setAllowed4Name, err)
@@ -165,7 +166,7 @@ func (n *NFTables) Init() (err error) {
 			Concatenation: true,
 			Interval:      true,
 			HasTimeout:    true,
-			Timeout:       defaultSetTimeout,
+			Timeout:       n.defaultAccessDuration,
 		}
 		if err = n.conn.AddSet(n.allowed[128], nil); err != nil {
 			return fmt.Errorf("failed adding set '%s': %w", setAllowed6Name, err)

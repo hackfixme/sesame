@@ -17,7 +17,8 @@ import (
 // The Init command creates initial Sesame artifacts, such as firewall rules,
 // the API server TLS key and certificate, and the Sesame database.
 type Init struct {
-	FirewallType ftypes.FirewallType `help:"The firewall to initialize. Valid values: nftables"`
+	FirewallType                  ftypes.FirewallType `help:"The firewall to initialize. Valid values: nftables"`
+	FirewallDefaultAccessDuration time.Duration       `default:"5m" help:"The default duration to allow access if unspecified."` //nolint:lll // Long struct tags are unavoidable.
 }
 
 // Run the init command.
@@ -34,7 +35,7 @@ func (c *Init) Run(appCtx *actx.Context) error {
 		if appCtx.Config.Firewall.Type.Valid {
 			appCtx.Logger.Warn("A firewall is already initialized, skipping", "type", appCtx.Config.Firewall.Type.V)
 		} else {
-			fw, _, err := firewall.Setup(appCtx, c.FirewallType)
+			fw, _, err := firewall.Setup(appCtx, c.FirewallType, c.FirewallDefaultAccessDuration)
 			if err != nil {
 				return err
 			}
@@ -45,6 +46,8 @@ func (c *Init) Run(appCtx *actx.Context) error {
 
 			appCtx.Config.Firewall.Type.V = c.FirewallType
 			appCtx.Config.Firewall.Type.Valid = true
+			appCtx.Config.Firewall.DefaultAccessDuration.V = c.FirewallDefaultAccessDuration
+			appCtx.Config.Firewall.DefaultAccessDuration.Valid = true
 		}
 	}
 
