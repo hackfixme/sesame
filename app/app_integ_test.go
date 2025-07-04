@@ -3,7 +3,6 @@ package app
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"testing"
 	"time"
 
@@ -107,7 +106,7 @@ func TestAppOpen(t *testing.T) {
 			h(assert.NoError(t, err))
 
 			args = append(args,
-				"--access-duration", fmt.Sprintf("%s", tt.accessDuration), tt.svcName,
+				"--duration", tt.accessDuration.String(), tt.svcName,
 			)
 			args = append(args, tt.clients...)
 

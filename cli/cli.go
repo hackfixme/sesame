@@ -13,9 +13,6 @@ import (
 
 // CLI is the command line interface of Sesame.
 type CLI struct {
-	kong *kong.Kong
-	kctx *kong.Context
-
 	Init    Init    `kong:"cmd,help='Create initial application artifacts.'"`
 	Open    Open    `kong:"cmd,help='Give clients access to services.'"`
 	Serve   Serve   `kong:"cmd,help='Start the web server.'"`
@@ -30,6 +27,9 @@ type CLI struct {
 	ConfigFile string           `kong:"default='${configFile}',help='Path to the Sesame configuration file.'"`
 	DataDir    string           `kong:"default='${dataDir}',help='Path to the directory where Sesame data is stored.'"`
 	Version    kong.VersionFlag `kong:"help='Output version and exit.'"`
+
+	kong *kong.Kong
+	kctx *kong.Context
 }
 
 // New initializes the command-line interface.
