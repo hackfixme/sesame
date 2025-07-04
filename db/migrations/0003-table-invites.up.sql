@@ -6,6 +6,6 @@ CREATE TABLE invites (
   user_id      INTEGER       NOT NULL,
   token        VARCHAR(32)   NOT NULL,
   public_key   VARCHAR(32)   NOT NULL,
-  privkey_enc  BLOB          NOT NULL,
+  privkey      BLOB          NOT NULL,
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
