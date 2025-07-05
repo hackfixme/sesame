@@ -17,6 +17,7 @@ type CLI struct {
 	Open    Open    `kong:"cmd,help='Give clients access to services.'"`
 	Serve   Serve   `kong:"cmd,help='Start the web server.'"`
 	Service Service `kong:"cmd,help='Manage services.'"`
+	User    User    `kong:"cmd,help='Manage remote users.'"`
 
 	Log struct {
 		Level slog.Level `enum:"DEBUG,INFO,WARN,ERROR" default:"INFO" help:"Set the app logging level."`
