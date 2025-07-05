@@ -6,33 +6,8 @@ import (
 	"errors"
 	"strings"
 
-	"go.hackfix.me/sesame/db/models"
 	"go.hackfix.me/sesame/db/types"
 )
-
-func GetEncryptionPrivKeyHash(ctx context.Context, d types.Querier) (sql.Null[string], error) {
-	var keyHash sql.Null[string]
-	err := d.QueryRowContext(ctx,
-		`SELECT private_key_hash FROM users WHERE type = ?`,
-		models.UserTypeLocal).Scan(&keyHash)
-	if err != nil {
-		return keyHash, err
-	}
-
-	return keyHash, nil
-}
-
-func GetEncryptionPubKey(ctx context.Context, d types.Querier) (sql.Null[string], error) {
-	var pubKey sql.Null[string]
-	err := d.QueryRowContext(ctx,
-		`SELECT public_key FROM users WHERE type = ?`,
-		models.UserTypeLocal).Scan(&pubKey)
-	if err != nil {
-		return pubKey, err
-	}
-
-	return pubKey, nil
-}
 
 func GetServerTLSInfo(ctx context.Context, d types.Querier) (
 	cert sql.Null[string], privKeyEnc sql.Null[[]byte], san sql.Null[string], err error,

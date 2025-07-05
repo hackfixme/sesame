@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strconv"
-	"strings"
 
 	"github.com/mr-tron/base58"
 
@@ -14,18 +12,9 @@ import (
 	"go.hackfix.me/sesame/db/types"
 )
 
-type UserType uint8
-
-const (
-	UserTypeLocal UserType = iota + 1
-	UserTypeRemote
-)
-
 type User struct {
 	ID                uint64
 	Name              string
-	Type              UserType
-	Roles             []*Role
 	PublicKey         *[32]byte
 	PrivateKey        *[32]byte
 	PrivateKeyHashEnc sql.Null[string]
@@ -59,10 +48,9 @@ func (u *User) Save(ctx context.Context, d types.Querier, update bool) error {
 			return errors.New("must provide either a user name or ID to update")
 		}
 
-		args := append([]any{u.Type, pubKeyEnc, privKeyHashEnc}, filter.Args...)
+		args := append([]any{pubKeyEnc, privKeyHashEnc}, filter.Args...)
 		updateStmt := fmt.Sprintf(`UPDATE users
-			SET type = ?,
-				public_key = ?,
+			SET public_key = ?,
 				private_key_hash = ?
 			WHERE %s`, filter.Where)
 		res, err := d.ExecContext(ctx, updateStmt, args...)
@@ -80,18 +68,11 @@ func (u *User) Save(ctx context.Context, d types.Querier, update bool) error {
 		if n > 1 {
 			return fmt.Errorf("integrity error: updated %d users", n)
 		}
-
-		// Load user to get its ID, but preserve the passed roles.
-		roles := u.Roles
-		if err := u.Load(ctx, d); err != nil {
-			return err
-		}
-		u.Roles = roles
 	} else {
 		insertStmt := `INSERT INTO users
-		(id, name, type, public_key, private_key_hash)
-		VALUES (NULL, ?, ?, ?, ?)`
-		res, err := d.ExecContext(ctx, insertStmt, u.Name, u.Type, pubKeyEnc,
+		(id, name, public_key, private_key_hash)
+		VALUES (NULL, ?, ?, ?)`
+		res, err := d.ExecContext(ctx, insertStmt, u.Name, pubKeyEnc,
 			privKeyHashEnc)
 		if err != nil {
 			return err
@@ -110,22 +91,6 @@ func (u *User) Save(ctx context.Context, d types.Querier, update bool) error {
 		_, err := d.ExecContext(ctx, delRoles, args...)
 		if err != nil {
 			return fmt.Errorf("failed deleting existing user roles: %w", err)
-		}
-	}
-
-	if len(u.Roles) > 0 {
-		stmt := `INSERT INTO users_roles (user_id, role_id) VALUES`
-
-		values := []string{}
-		for _, role := range u.Roles {
-			values = append(values, `(:user_id, ?)`)
-			args = append(args, role.ID)
-		}
-		stmt = fmt.Sprintf("%s %s", stmt, strings.Join(values, ", "))
-
-		_, err := d.ExecContext(ctx, stmt, args...)
-		if err != nil {
-			return fmt.Errorf("failed saving user roles: %w", err)
 		}
 	}
 
@@ -185,9 +150,6 @@ func (u *User) Delete(ctx context.Context, d types.Querier) error {
 		filterStr = fmt.Sprintf("name '%s'", u.Name)
 	}
 
-	// Disable removing local users
-	filter = filter.And(types.NewFilter("type != ?", []any{UserTypeLocal}))
-
 	stmt := fmt.Sprintf(`DELETE FROM users WHERE %s`, filter.Where)
 
 	res, err := d.ExecContext(ctx, stmt, filter.Args...)
@@ -204,34 +166,10 @@ func (u *User) Delete(ctx context.Context, d types.Querier) error {
 	return nil
 }
 
-// Can returns true if the user is allowed to perform the action on the target.
-func (u *User) Can(action, target string) (bool, error) {
-	if len(u.Roles) == 0 {
-		return false, nil
-	}
-	for _, role := range u.Roles {
-		can, err := role.Can(action, target)
-		if err != nil {
-			return false, err
-		}
-		if can {
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
 // Users returns one or more users from the database. An optional filter can be
 // passed to limit the results.
 func Users(ctx context.Context, d types.Querier, filter *types.Filter) ([]*User, error) {
-	query := `SELECT u.id, u.name, u.type, u.public_key, u.private_key_hash,
-		(SELECT group_concat(r.id)
-		FROM roles r
-		INNER JOIN users_roles ur
-			ON ur.role_id = r.id
-			AND ur.user_id = u.id
-		ORDER BY r.name ASC) role_ids
+	query := `SELECT u.id, u.name, u.public_key, u.private_key_hash
 		FROM users u %s
 		ORDER BY u.name ASC`
 
@@ -251,25 +189,21 @@ func Users(ctx context.Context, d types.Querier, filter *types.Filter) ([]*User,
 
 	var user *User
 	users := []*User{}
-	roles := map[string]*Role{}
 	type row struct {
 		ID             uint64
 		UserName       string
-		UserType       UserType
 		PubKeyEnc      sql.Null[string]
 		PrivKeyHashEnc sql.Null[string]
-		RoleIDsConcat  sql.Null[string]
 	}
 	for rows.Next() {
 		r := row{}
-		err := rows.Scan(&r.ID, &r.UserName, &r.UserType, &r.PubKeyEnc,
-			&r.PrivKeyHashEnc, &r.RoleIDsConcat)
+		err := rows.Scan(&r.ID, &r.UserName, &r.PubKeyEnc, &r.PrivKeyHashEnc)
 		if err != nil {
 			return nil, fmt.Errorf("failed scanning user data: %w", err)
 		}
 
 		if user == nil || user.Name != r.UserName {
-			user = &User{ID: r.ID, Name: r.UserName, Type: r.UserType}
+			user = &User{ID: r.ID, Name: r.UserName}
 			if r.PubKeyEnc.Valid {
 				if user.PublicKey, err = crypto.DecodeKey(r.PubKeyEnc.V); err != nil {
 					return nil, fmt.Errorf("failed decoding public key of user ID %d: %w", r.ID, err)
@@ -280,27 +214,6 @@ func Users(ctx context.Context, d types.Querier, filter *types.Filter) ([]*User,
 			}
 
 			users = append(users, user)
-		}
-
-		if !r.RoleIDsConcat.Valid {
-			continue
-		}
-		roleIDs := strings.Split(r.RoleIDsConcat.V, ",")
-		for _, rIDStr := range roleIDs {
-			if r, ok := roles[rIDStr]; ok {
-				user.Roles = append(user.Roles, r)
-				continue
-			}
-			rID, err := strconv.Atoi(rIDStr)
-			if err != nil {
-				return nil, fmt.Errorf("failed converting role ID %s: %w", rIDStr, err)
-			}
-			role := &Role{ID: uint64(rID)}
-			if err := role.Load(ctx, d); err != nil {
-				return nil, fmt.Errorf("failed loading role ID %d: %w", rID, err)
-			}
-			user.Roles = append(user.Roles, role)
-			roles[rIDStr] = role
 		}
 	}
 
