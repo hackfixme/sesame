@@ -56,7 +56,7 @@ func (r *Remote) Save(ctx context.Context, d types.Querier, update bool) error {
 		)
 		filter, filterStr, err = r.createFilter(ctx, d, 1)
 		if err != nil {
-			return fmt.Errorf("failed creating remotes filter: %w", err)
+			return fmt.Errorf("failed creating query filter: %w", err)
 		}
 		stmt = fmt.Sprintf(`UPDATE invites SET name = ?, address = ?
 							WHERE %s`, filter.Where)
@@ -81,7 +81,7 @@ func (r *Remote) Save(ctx context.Context, d types.Querier, update bool) error {
 		if n, err := res.RowsAffected(); err != nil {
 			return err
 		} else if n == 0 {
-			return types.ErrNoResult{Msg: fmt.Sprintf("remote with %s doesn't exist", filterStr)}
+			return types.NoResultError{ModelName: "remote", ID: filterStr}
 		}
 	} else {
 		rID, err := res.LastInsertId()
@@ -99,7 +99,7 @@ func (r *Remote) Save(ctx context.Context, d types.Querier, update bool) error {
 func (r *Remote) Load(ctx context.Context, d types.Querier) error {
 	filter, filterStr, err := r.createFilter(ctx, d, 1)
 	if err != nil {
-		return fmt.Errorf("failed loading remote: %w", err)
+		return types.LoadError{ModelName: "remote", Err: err}
 	}
 
 	remotes, err := Remotes(ctx, d, filter)
@@ -108,7 +108,7 @@ func (r *Remote) Load(ctx context.Context, d types.Querier) error {
 	}
 
 	if len(remotes) == 0 {
-		return types.ErrNoResult{Msg: fmt.Sprintf("remote with %s doesn't exist", filterStr)}
+		return types.NoResultError{ModelName: "remote", ID: filterStr}
 	}
 
 	*r = *remotes[0]
@@ -211,7 +211,7 @@ func Remotes(ctx context.Context, d types.Querier, filter *types.Filter) ([]*Rem
 
 	rows, err := d.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed loading remotes: %w", err)
+		return nil, types.LoadError{ModelName: "remotes", Err: err}
 	}
 
 	remotes := []*Remote{}
@@ -220,7 +220,7 @@ func Remotes(ctx context.Context, d types.Querier, filter *types.Filter) ([]*Rem
 		err := rows.Scan(&r.ID, &r.CreatedAt, &r.Name, &r.Address, &r.TLSCACert,
 			&r.TLSServerSAN, &r.tlsClientCertEnc, &r.tlsClientKeyEnc)
 		if err != nil {
-			return nil, fmt.Errorf("failed scanning remote data: %w", err)
+			return nil, types.ScanError{ModelName: "remote", Err: err}
 		}
 
 		remotes = append(remotes, &r)

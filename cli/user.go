@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"fmt"
-
 	"github.com/alecthomas/kong"
 
 	actx "go.hackfix.me/sesame/app/context"
@@ -29,14 +27,13 @@ func (c *User) Run(kctx *kong.Context, appCtx *actx.Context) error {
 	case "user add <name>":
 		user := &models.User{Name: c.Add.Name}
 		if err := user.Save(dbCtx, appCtx.DB, false); err != nil {
-			return aerrors.NewRuntimeError(
-				fmt.Sprintf("failed adding user '%s'", c.Add.Name), err, "")
+			return aerrors.NewRuntimeError("failed adding user", err, "")
 		}
 	case "user remove <name>":
 		user := &models.User{Name: c.Remove.Name}
 		err := user.Delete(dbCtx, appCtx.DB)
 		if err != nil {
-			return err
+			return aerrors.NewRuntimeError("failed removing user", err, "")
 		}
 	case "user list":
 		users, err := models.Users(dbCtx, appCtx.DB, nil)

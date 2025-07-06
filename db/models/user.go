@@ -63,10 +63,10 @@ func (u *User) Save(ctx context.Context, d types.Querier, update bool) error {
 			return err
 		}
 		if n == 0 {
-			return fmt.Errorf("user with %s doesn't exist", filterStr)
+			return types.NoResultError{ModelName: "user", ID: filterStr}
 		}
 		if n > 1 {
-			return fmt.Errorf("integrity error: updated %d users", n)
+			return types.IntegrityError{Msg: fmt.Sprintf("updated %d users", n)}
 		}
 	} else {
 		insertStmt := `INSERT INTO users
@@ -75,7 +75,7 @@ func (u *User) Save(ctx context.Context, d types.Querier, update bool) error {
 		res, err := d.ExecContext(ctx, insertStmt, u.Name, pubKeyEnc,
 			privKeyHashEnc)
 		if err != nil {
-			return err
+			return types.Err("user", fmt.Sprintf("name '%s'", u.Name), err)
 		}
 
 		uID, err := res.LastInsertId()
@@ -92,7 +92,7 @@ func (u *User) Save(ctx context.Context, d types.Querier, update bool) error {
 // for the lookup.
 func (u *User) Load(ctx context.Context, d types.Querier) error {
 	if u.ID == 0 && u.Name == "" {
-		return fmt.Errorf("failed loading user: either user ID or Name must be set")
+		return types.InvalidInputError{Msg: "either user ID or Name must be set"}
 	}
 
 	var filter *types.Filter
@@ -111,7 +111,7 @@ func (u *User) Load(ctx context.Context, d types.Querier) error {
 	}
 
 	if len(users) == 0 {
-		return types.ErrNoResult{Msg: fmt.Sprintf("user with %s doesn't exist", filterStr)}
+		return types.NoResultError{ModelName: "user", ID: filterStr}
 	}
 
 	// This is dodgy, but the unique constraint on both users.id and users.name
@@ -128,7 +128,7 @@ func (u *User) Load(ctx context.Context, d types.Querier) error {
 // must be set for the lookup. It returns an error if the user doesn't exist.
 func (u *User) Delete(ctx context.Context, d types.Querier) error {
 	if u.ID == 0 && u.Name == "" {
-		return fmt.Errorf("failed deleting user: either user ID or Name must be set")
+		return types.InvalidInputError{Msg: "either user ID or Name must be set"}
 	}
 
 	var filter *types.Filter
@@ -145,13 +145,13 @@ func (u *User) Delete(ctx context.Context, d types.Querier) error {
 
 	res, err := d.ExecContext(ctx, stmt, filter.Args...)
 	if err != nil {
-		return fmt.Errorf("failed deleting user with %s: %w", filterStr, err)
+		return types.Err("user", filterStr, err)
 	}
 
 	if n, err := res.RowsAffected(); err != nil {
 		return err
 	} else if n == 0 {
-		return types.ErrNoResult{Msg: fmt.Sprintf("user with %s doesn't exist", filterStr)}
+		return types.NoResultError{ModelName: "user", ID: filterStr}
 	}
 
 	return nil
@@ -175,7 +175,7 @@ func Users(ctx context.Context, d types.Querier, filter *types.Filter) ([]*User,
 
 	rows, err := d.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed loading users: %w", err)
+		return nil, types.LoadError{ModelName: "users", Err: err}
 	}
 
 	var user *User
@@ -190,7 +190,7 @@ func Users(ctx context.Context, d types.Querier, filter *types.Filter) ([]*User,
 		r := row{}
 		err := rows.Scan(&r.ID, &r.UserName, &r.PubKeyEnc, &r.PrivKeyHashEnc)
 		if err != nil {
-			return nil, fmt.Errorf("failed scanning user data: %w", err)
+			return nil, types.ScanError{ModelName: "user", Err: err}
 		}
 
 		if user == nil || user.Name != r.UserName {

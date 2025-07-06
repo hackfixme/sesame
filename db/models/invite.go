@@ -13,6 +13,7 @@ import (
 
 	"github.com/mr-tron/base58"
 	"github.com/nrednav/cuid2"
+
 	"go.hackfix.me/sesame/crypto"
 	"go.hackfix.me/sesame/db/types"
 )
@@ -88,7 +89,7 @@ func (inv *Invite) Save(ctx context.Context, d types.Querier, update bool) error
 		)
 		filter, filterStr, err = inv.createFilter(ctx, d, 1)
 		if err != nil {
-			return fmt.Errorf("failed updating invite: %w", err)
+			return fmt.Errorf("failed creating query filter: %w", err)
 		}
 		stmt = fmt.Sprintf(`UPDATE invites SET expires = ? WHERE %s`, filter.Where)
 		args = append(args, inv.Expires)
@@ -111,7 +112,7 @@ func (inv *Invite) Save(ctx context.Context, d types.Querier, update bool) error
 		if n, err := res.RowsAffected(); err != nil {
 			return err
 		} else if n == 0 {
-			return types.ErrNoResult{Msg: fmt.Sprintf("invite with %s doesn't exist", filterStr)}
+			return types.NoResultError{ModelName: "invite", ID: filterStr}
 		}
 	} else {
 		invID, err := res.LastInsertId()
@@ -129,7 +130,7 @@ func (inv *Invite) Save(ctx context.Context, d types.Querier, update bool) error
 func (inv *Invite) Load(ctx context.Context, d types.Querier) error {
 	filter, filterStr, err := inv.createFilter(ctx, d, 1)
 	if err != nil {
-		return fmt.Errorf("failed loading invite: %w", err)
+		return fmt.Errorf("failed creating query filter: %w", err)
 	}
 
 	invites, err := Invites(ctx, d, filter)
@@ -138,7 +139,7 @@ func (inv *Invite) Load(ctx context.Context, d types.Querier) error {
 	}
 
 	if len(invites) == 0 {
-		return types.ErrNoResult{Msg: fmt.Sprintf("invite with %s doesn't exist", filterStr)}
+		return types.NoResultError{ModelName: "invite", ID: filterStr}
 	}
 
 	*inv = *invites[0]
@@ -153,7 +154,7 @@ func (inv *Invite) Load(ctx context.Context, d types.Querier) error {
 func (inv *Invite) Delete(ctx context.Context, d types.Querier) error {
 	filter, filterStr, err := inv.createFilter(ctx, d, 1)
 	if err != nil {
-		return fmt.Errorf("failed deleting invite: %w", err)
+		return fmt.Errorf("failed creating query filter: %w", err)
 	}
 
 	stmt := fmt.Sprintf(`DELETE FROM invites WHERE %s`, filter.Where)
@@ -165,7 +166,7 @@ func (inv *Invite) Delete(ctx context.Context, d types.Querier) error {
 	if n, err := res.RowsAffected(); err != nil {
 		return err
 	} else if n == 0 {
-		return types.ErrNoResult{Msg: fmt.Sprintf("invite with %s doesn't exist", filterStr)}
+		return types.NoResultError{ModelName: "invite", ID: filterStr}
 	}
 
 	return nil
@@ -262,7 +263,7 @@ func Invites(ctx context.Context, d types.Querier, filter *types.Filter) ([]*Inv
 
 	rows, err := d.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed loading invites: %w", err)
+		return nil, types.LoadError{ModelName: "invites", Err: err}
 	}
 
 	invites := []*Invite{}
@@ -272,7 +273,7 @@ func Invites(ctx context.Context, d types.Querier, filter *types.Filter) ([]*Inv
 		var userID uint64
 		err := rows.Scan(&inv.ID, &inv.UUID, &inv.CreatedAt, &inv.Expires, &userID, &inv.Token, &inv.PublicKey, &inv.privKeyEnc)
 		if err != nil {
-			return nil, fmt.Errorf("failed scanning invite data: %w", err)
+			return nil, types.ScanError{ModelName: "invite", Err: err}
 		}
 
 		// TODO: Load users in the same query for efficiency
@@ -280,7 +281,7 @@ func Invites(ctx context.Context, d types.Querier, filter *types.Filter) ([]*Inv
 		if !ok {
 			user = &User{ID: userID}
 			if err = user.Load(ctx, d); err != nil {
-				return nil, fmt.Errorf("failed loading invite user: %w", err)
+				return nil, types.LoadError{ModelName: "invite user", Err: err}
 			}
 			users[userID] = user
 		}
