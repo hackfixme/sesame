@@ -1,6 +1,7 @@
 package errors
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 )
@@ -58,6 +59,10 @@ func (e RuntimeError) Message() string {
 
 // Errorf logs an error message, extracting a hint or cause field if available.
 func Errorf(err error, args ...any) {
+	var rtErr RuntimeError
+	if errors.As(err, &rtErr) {
+		err = rtErr
+	}
 	msg := err.Error()
 	if errh, ok := err.(WithMessage); ok {
 		mmsg := errh.Message()
