@@ -15,7 +15,6 @@ require (
 	github.com/nrednav/cuid2 v1.0.1
 	github.com/olekukonko/tablewriter v1.0.8
 	github.com/stretchr/testify v1.10.0
-	github.com/zpatrick/rbac v0.0.0-20180829190353-d2c4f050cf28
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
 	golang.org/x/crypto v0.39.0
 	golang.org/x/sys v0.33.0
@@ -37,7 +36,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
-	github.com/ryanuber/go-glob v1.0.0 // indirect
 	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/sync v0.6.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

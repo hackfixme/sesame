@@ -85,15 +85,6 @@ func (u *User) Save(ctx context.Context, d types.Querier, update bool) error {
 		u.ID = uint64(uID)
 	}
 
-	args := []any{sql.Named("user_id", u.ID)}
-	if update {
-		delRoles := `DELETE FROM users_roles WHERE user_id = :user_id`
-		_, err := d.ExecContext(ctx, delRoles, args...)
-		if err != nil {
-			return fmt.Errorf("failed deleting existing user roles: %w", err)
-		}
-	}
-
 	return nil
 }
 
