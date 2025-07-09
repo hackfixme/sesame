@@ -30,9 +30,7 @@ type Invite struct {
 
 // NewInvite creates a new invitation for a remote user, which contains a unique
 // token that must be supplied when authenticating to the server.
-func NewInvite(
-	user *User, ttl time.Duration, uuid string, timeNowFn func() time.Time,
-) (*Invite, error) {
+func NewInvite(user *User, expiration time.Time, uuid string) (*Invite, error) {
 	privKey, err := ecdh.X25519().GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, err
@@ -43,14 +41,9 @@ func NewInvite(
 		return nil, fmt.Errorf("failed generating nonce: %w", err)
 	}
 
-	timeNow := timeNowFn().UTC()
-	expiresAt := timeNow.Add(ttl)
-
 	return &Invite{
 		UUID:      uuid,
-		CreatedAt: timeNow,
-		UpdatedAt: timeNow,
-		ExpiresAt: expiresAt,
+		ExpiresAt: expiration,
 		User:      user,
 		Nonce:     nonce,
 		privKey:   privKey,
@@ -69,6 +62,7 @@ func (inv *Invite) Save(ctx context.Context, d types.Querier, update bool) error
 		args      = []any{}
 	)
 
+	timeNow := d.TimeNow().UTC()
 	if update {
 		var (
 			filter *types.Filter
@@ -82,14 +76,13 @@ func (inv *Invite) Save(ctx context.Context, d types.Querier, update bool) error
 			SET updated_at = ?,
 				expires_at = ?
 			WHERE %s`, filter.Where)
-		args = append(args, inv.ExpiresAt)
-		args = append(args, filter.Args...)
+		args = append([]any{timeNow, inv.ExpiresAt}, filter.Args...)
 		op = fmt.Sprintf("updating invite with %s", filterStr)
 	} else {
 		stmt = `INSERT INTO invites (
 				id, uuid, created_at, updated_at, expires_at, user_id, private_key, nonce)
 				VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)`
-		args = append(args, inv.UUID, inv.CreatedAt, inv.UpdatedAt, inv.ExpiresAt, inv.User.ID, inv.privKey.Bytes(), inv.Nonce)
+		args = []any{inv.UUID, timeNow, timeNow, inv.ExpiresAt, inv.User.ID, inv.privKey.Bytes(), inv.Nonce}
 		op = "saving new invite"
 	}
 
@@ -104,15 +97,18 @@ func (inv *Invite) Save(ctx context.Context, d types.Querier, update bool) error
 		} else if n == 0 {
 			return types.NoResultError{ModelName: "invite", ID: filterStr}
 		}
+		inv.UpdatedAt = timeNow
 	} else {
 		invID, err := res.LastInsertId()
 		if err != nil {
 			return err
 		}
 		inv.ID = uint64(invID)
+		inv.CreatedAt = timeNow
+		inv.UpdatedAt = timeNow
 	}
 
-	return err
+	return nil
 }
 
 // Load the invite record from the database. The invite ID, UUID or token must
