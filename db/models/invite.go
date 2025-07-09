@@ -1,13 +1,11 @@
 package models
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdh"
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"io"
 	"slices"
 	"time"
 
@@ -22,52 +20,40 @@ type Invite struct {
 	ID        uint64
 	UUID      string
 	CreatedAt time.Time
-	Expires   time.Time
+	UpdatedAt time.Time
+	ExpiresAt time.Time
 	User      *User
-	Token     string
-	PublicKey string
+	Nonce     []byte
 
-	// Encrypted X25519 private key
-	privKeyEnc []byte
+	privKey *ecdh.PrivateKey
 }
 
-// NewInvite creates a new invitation for a remote user. A unique token is
-// created that must be supplied when authenticating to the server. The token is
-// constructed by concatenating random 32 bytes and an ephemeral X25519
-// public key, encoded as a base 58 string.
-// The encryptionKey is a separate persistent symmetric key used for encrypting
-// the X25519 private key.
-func NewInvite(user *User, ttl time.Duration, uuidgen func() string, encryptionKey *[32]byte) (*Invite, error) {
+// NewInvite creates a new invitation for a remote user, which contains a unique
+// token that must be supplied when authenticating to the server.
+func NewInvite(
+	user *User, ttl time.Duration, uuid string, timeNowFn func() time.Time,
+) (*Invite, error) {
 	privKey, err := ecdh.X25519().GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, err
 	}
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return nil, err
+
+	nonce, err := crypto.RandomData(32)
+	if err != nil {
+		return nil, fmt.Errorf("failed generating nonce: %w", err)
 	}
 
-	privKeyR := bytes.NewReader(privKey.Bytes())
-	privKeyEnc, err := crypto.EncryptSym(privKeyR, encryptionKey)
-	if err != nil {
-		return nil, err
-	}
-	privKeyEncData, err := io.ReadAll(privKeyEnc)
-	if err != nil {
-		return nil, err
-	}
-
-	createdAt := time.Now().UTC()
-	expires := createdAt.Add(ttl)
+	timeNow := timeNowFn().UTC()
+	expiresAt := timeNow.Add(ttl)
 
 	return &Invite{
-		UUID:       uuidgen(),
-		CreatedAt:  createdAt,
-		Expires:    expires,
-		User:       user,
-		Token:      base58.Encode(b),
-		PublicKey:  base58.Encode(privKey.PublicKey().Bytes()),
-		privKeyEnc: privKeyEncData,
+		UUID:      uuid,
+		CreatedAt: timeNow,
+		UpdatedAt: timeNow,
+		ExpiresAt: expiresAt,
+		User:      user,
+		Nonce:     nonce,
+		privKey:   privKey,
 	}, nil
 }
 
@@ -82,6 +68,7 @@ func (inv *Invite) Save(ctx context.Context, d types.Querier, update bool) error
 		op        string
 		args      = []any{}
 	)
+
 	if update {
 		var (
 			filter *types.Filter
@@ -91,15 +78,18 @@ func (inv *Invite) Save(ctx context.Context, d types.Querier, update bool) error
 		if err != nil {
 			return fmt.Errorf("failed creating query filter: %w", err)
 		}
-		stmt = fmt.Sprintf(`UPDATE invites SET expires = ? WHERE %s`, filter.Where)
-		args = append(args, inv.Expires)
+		stmt = fmt.Sprintf(`UPDATE invites
+			SET updated_at = ?,
+				expires_at = ?
+			WHERE %s`, filter.Where)
+		args = append(args, inv.ExpiresAt)
 		args = append(args, filter.Args...)
 		op = fmt.Sprintf("updating invite with %s", filterStr)
 	} else {
 		stmt = `INSERT INTO invites (
-				id, uuid, created_at, expires, user_id, token, public_key, privkey_enc)
+				id, uuid, created_at, updated_at, expires_at, user_id, private_key, nonce)
 				VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)`
-		args = append(args, inv.UUID, inv.CreatedAt, inv.Expires, inv.User.ID, inv.Token, inv.PublicKey, inv.privKeyEnc)
+		args = append(args, inv.UUID, inv.CreatedAt, inv.UpdatedAt, inv.ExpiresAt, inv.User.ID, inv.privKey.Bytes(), inv.Nonce)
 		op = "saving new invite"
 	}
 
@@ -172,37 +162,16 @@ func (inv *Invite) Delete(ctx context.Context, d types.Querier) error {
 	return nil
 }
 
-// TokenComposite generates the final token by concatenating the random token
-// with the X25519 public key.
-func (inv *Invite) TokenComposite() (string, error) {
-	tokenDec, err := base58.Decode(inv.Token)
-	if err != nil {
-		return "", err
-	}
-	pubKeyDec, err := base58.Decode(inv.PublicKey)
-	if err != nil {
-		return "", err
-	}
-
-	return base58.Encode(slices.Concat(tokenDec, pubKeyDec)), nil
+// Token generates the invite token by concatenating the nonce with the
+// X25519 public key, and encoding it in base58.
+func (inv *Invite) Token() (string, error) {
+	token := slices.Concat(inv.Nonce, inv.privKey.PublicKey().Bytes())
+	return base58.Encode(token), nil
 }
 
-// PrivateKey returns the decrypted X25519 private key.
-func (inv *Invite) PrivateKey(encryptionKey *[32]byte) (*ecdh.PrivateKey, error) {
-	privKeyDataR, err := crypto.DecryptSym(bytes.NewReader(inv.privKeyEnc), encryptionKey)
-	if err != nil {
-		return nil, err
-	}
-	privKeyData, err := io.ReadAll(privKeyDataR)
-	if err != nil {
-		return nil, err
-	}
-	privKey, err := ecdh.X25519().NewPrivateKey(privKeyData)
-	if err != nil {
-		return nil, err
-	}
-
-	return privKey, nil
+// PrivateKey returns the X25519 private key.
+func (inv *Invite) PrivateKey() *ecdh.PrivateKey {
+	return inv.privKey
 }
 
 func (inv *Invite) createFilter(ctx context.Context, d types.Querier, limit int) (*types.Filter, string, error) {
@@ -222,10 +191,10 @@ func (inv *Invite) createFilter(ctx context.Context, d types.Querier, limit int)
 			filter = types.NewFilter("uuid = ?", []any{inv.UUID})
 			filterStr = fmt.Sprintf("UUID '%s'", inv.UUID)
 		}
-	} else if inv.Token != "" {
-		filter = types.NewFilter("token = ?", []any{inv.Token}).
-			And(types.NewFilter("expires > ?", []any{time.Now().UTC()}))
-		filterStr = fmt.Sprintf("token '%s'", inv.Token)
+	} else if len(inv.Nonce) > 0 {
+		filter = types.NewFilter("nonce = ?", []any{inv.Nonce}).
+			And(types.NewFilter("expires_at > ?", []any{d.TimeNow().UTC()}))
+		filterStr = "nonce"
 	} else {
 		return nil, "", errors.New("must provide either an invite ID, UUID or token")
 	}
@@ -233,7 +202,7 @@ func (inv *Invite) createFilter(ctx context.Context, d types.Querier, limit int)
 	if count, err := filterCount(ctx, d, "invites", filter); err != nil {
 		return nil, "", err
 	} else if count > limit {
-		return nil, "", fmt.Errorf("filter %s returns %d results; make the filter more specific", filterStr, count)
+		return nil, "", fmt.Errorf("filter with %s returns %d results; make the filter more specific", filterStr, count)
 	}
 
 	filter.Limit = limit
@@ -244,9 +213,9 @@ func (inv *Invite) createFilter(ctx context.Context, d types.Querier, limit int)
 // Invites returns one or more invites from the database. An optional filter can
 // be passed to limit the results.
 func Invites(ctx context.Context, d types.Querier, filter *types.Filter) ([]*Invite, error) {
-	queryFmt := `SELECT inv.id, inv.uuid, inv.created_at, inv.expires, inv.user_id, inv.token, inv.public_key, inv.privkey_enc
+	queryFmt := `SELECT inv.id, inv.uuid, inv.created_at, inv.updated_at, inv.expires_at, inv.user_id, inv.private_key, inv.nonce
 		FROM invites inv
-		%s ORDER BY inv.expires ASC %s`
+		%s ORDER BY inv.expires_at ASC %s`
 
 	where := "1=1"
 	var limit string
@@ -269,9 +238,12 @@ func Invites(ctx context.Context, d types.Querier, filter *types.Filter) ([]*Inv
 	invites := []*Invite{}
 	users := map[uint64]*User{}
 	for rows.Next() {
-		inv := Invite{}
-		var userID uint64
-		err := rows.Scan(&inv.ID, &inv.UUID, &inv.CreatedAt, &inv.Expires, &userID, &inv.Token, &inv.PublicKey, &inv.privKeyEnc)
+		var (
+			inv          = Invite{}
+			userID       uint64
+			privKeyBytes []byte
+		)
+		err := rows.Scan(&inv.ID, &inv.UUID, &inv.CreatedAt, &inv.UpdatedAt, &inv.ExpiresAt, &userID, &privKeyBytes, &inv.Nonce)
 		if err != nil {
 			return nil, types.ScanError{ModelName: "invite", Err: err}
 		}
@@ -285,8 +257,14 @@ func Invites(ctx context.Context, d types.Querier, filter *types.Filter) ([]*Inv
 			}
 			users[userID] = user
 		}
-
 		inv.User = user
+
+		privKey, err := ecdh.X25519().NewPrivateKey(privKeyBytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed loading X25519 private key: %w", err)
+		}
+		inv.privKey = privKey
+
 		invites = append(invites, &inv)
 	}
 
