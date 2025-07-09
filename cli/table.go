@@ -37,7 +37,7 @@ func newTable(header []string, data [][]string, w io.Writer) *tablewriter.Table 
 			Row: tw.CellConfig{
 				Formatting:   tw.CellFormatting{AutoWrap: tw.WrapNone},
 				Alignment:    tw.CellAlignment{Global: tw.AlignLeft},
-				ColMaxWidths: tw.CellWidth{Global: 25},
+				ColMaxWidths: tw.CellWidth{Global: 50},
 			},
 		}),
 	)
