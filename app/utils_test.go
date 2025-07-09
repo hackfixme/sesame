@@ -42,7 +42,7 @@ func newTestApp(ctx context.Context, options ...Option) (*testApp, error) {
 	// Not using just :memory: to avoid 'no such table' issue.
 	// See https://github.com/mattn/go-sqlite3#faq
 	d, err := db.Open(ctx,
-		fmt.Sprintf("file:sesame-%x?mode=memory&cache=shared", rndName))
+		fmt.Sprintf("file:sesame-%x?mode=memory&cache=shared", rndName), timeNowFn)
 	if err != nil {
 		return nil, err
 	}

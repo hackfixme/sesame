@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"fmt"
 	"slices"
+	"time"
 )
 
 // Querier exposes only methods for running SQL queries, and some helper functions.
 type Querier interface {
 	NewContext() context.Context
+	TimeNow() time.Time
 	ExecContext(ctx context.Context, sql string, arguments ...any) (sql.Result, error)
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row

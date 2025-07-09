@@ -127,7 +127,7 @@ func (app *App) setupDB(dataDir string) error {
 	var err error
 	if app.ctx.DB == nil {
 		dbPath := filepath.Join(dataDir, "sesame.db")
-		app.ctx.DB, err = db.Open(app.ctx.Ctx, dbPath)
+		app.ctx.DB, err = db.Open(app.ctx.Ctx, dbPath, app.ctx.TimeNow)
 		if err != nil {
 			return err
 		}

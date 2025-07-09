@@ -22,11 +22,12 @@ var migrationsFS embed.FS
 type DB struct {
 	*sql.DB
 	ctx        context.Context
+	timeNow    func() time.Time
 	path       string
 	migrations []*migrator.Migration
 }
 
-var _ types.Querier = &DB{}
+var _ types.Querier = (*DB)(nil)
 
 // Init creates the database schema and initial records.
 func (d *DB) Init(
@@ -60,7 +61,7 @@ func (d *DB) NewContext() context.Context {
 	return ctx
 }
 
-func Open(ctx context.Context, path string) (*DB, error) {
+func Open(ctx context.Context, path string, timeNow func() time.Time) (*DB, error) {
 	var d *DB
 	if strings.Contains(path, "mode=memory") || strings.Contains(path, ":memory:") {
 		defer func() {
@@ -77,7 +78,7 @@ func Open(ctx context.Context, path string) (*DB, error) {
 		return nil, err
 	}
 
-	d = &DB{DB: sqliteDB, ctx: ctx, path: path}
+	d = &DB{DB: sqliteDB, ctx: ctx, path: path, timeNow: timeNow}
 
 	// Enable foreign key enforcement
 	_, err = d.Exec(`PRAGMA foreign_keys = ON;`)
@@ -96,4 +97,9 @@ func Open(ctx context.Context, path string) (*DB, error) {
 	d.migrations = migrations
 
 	return d, nil
+}
+
+// TimeNow returns the current system time.
+func (d *DB) TimeNow() time.Time {
+	return d.timeNow()
 }
