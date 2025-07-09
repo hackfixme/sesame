@@ -11,13 +11,14 @@ import (
 	aerrors "go.hackfix.me/sesame/app/errors"
 	"go.hackfix.me/sesame/db/models"
 	"go.hackfix.me/sesame/db/types"
+	"go.hackfix.me/sesame/xtime"
 )
 
 // The Invite command manages invitations for remote users.
 type Invite struct {
 	User struct {
 		Name       string    `arg:"" help:"The name of the user to invite."`
-		Expiration time.Time `default:"1h" short:"e" type:"expiration" help:"Invite expiration as a time duration from now (e.g. 5m, 1h) or a future timestamp in RFC 3339 format (e.g. %s)."`
+		Expiration time.Time `default:"1h" short:"e" type:"expiration" help:"Invite expiration as a time duration from now (e.g. 5m, 1h, 3d, 1w) or a future timestamp in RFC 3339 format (e.g. %s)."`
 	} `cmd:"" help:"Create a new invitation token for an existing user to access this Sesame node remotely."`
 	List struct {
 		All bool `short:"a" help:"Also include expired invites."`
@@ -27,7 +28,7 @@ type Invite struct {
 	} `cmd:"" aliases:"rm" help:"Delete one or more invites."`
 	Update struct {
 		ID         string    `arg:"" help:"Unique invite ID. A short prefix can be specified as long as it is unique."`
-		Expiration time.Time `short:"e" type:"expiration" required:"" help:"Invite expiration as a time duration from now (e.g. 5m, 1h) or a future timestamp in RFC 3339 format (e.g. %s)."`
+		Expiration time.Time `short:"e" type:"expiration" required:"" help:"Invite expiration as a time duration from now (e.g. 5m, 1h, 3d, 1w) or a future timestamp in RFC 3339 format (e.g. %s)."`
 	} `cmd:"" help:"Update an invite."`
 }
 
@@ -59,7 +60,7 @@ func (c *Invite) Run(kctx *kong.Context, appCtx *actx.Context) error {
 		timeLeft := inv.ExpiresAt.Sub(appCtx.TimeNow().UTC())
 		expFmt := fmt.Sprintf("%s (%s)",
 			inv.ExpiresAt.Local().Format(time.DateTime),
-			timeLeft.Round(time.Second))
+			xtime.FormatDuration(timeLeft, time.Second))
 		fmt.Fprintf(appCtx.Stdout, `Token: %s
 Expires At: %s
 	`, token, expFmt)
@@ -87,7 +88,7 @@ Expires At: %s
 			if timeLeft > 0 {
 				expFmt := fmt.Sprintf("%s (%s)",
 					inv.ExpiresAt.Local().Format(time.DateTime),
-					timeLeft.Round(time.Second))
+					xtime.FormatDuration(timeLeft, time.Second))
 				active = append(active, []string{inv.UUID, inv.User.Name, token, expFmt})
 			} else {
 				expFmt := fmt.Sprintf("%s (expired)",

@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/alecthomas/kong"
+
+	"go.hackfix.me/sesame/xtime"
 )
 
 // ExpirationMapper parses the invitation expiration duration or timestamp.
@@ -27,7 +29,7 @@ func (em ExpirationMapper) Decode(kctx *kong.DecodeContext, target reflect.Value
 
 	t, err := time.Parse(time.RFC3339, value)
 	if err != nil {
-		dur, err := time.ParseDuration(value)
+		dur, err := xtime.ParseDuration(value)
 		if err != nil {
 			return err
 		}
