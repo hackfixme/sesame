@@ -2,42 +2,22 @@ package models
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"time"
 
-	"github.com/mr-tron/base58"
-
-	"go.hackfix.me/sesame/crypto"
 	"go.hackfix.me/sesame/db/types"
 )
 
 type User struct {
-	ID                uint64
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
-	Name              string
-	PublicKey         *[32]byte
-	PrivateKey        *[32]byte
-	PrivateKeyHashEnc sql.Null[string]
+	ID        uint64
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	Name      string
 }
 
 // Save stores the user data in the database.
 func (u *User) Save(ctx context.Context, d types.Querier, update bool) error {
-	var pubKeyEnc sql.Null[string]
-	if u.PublicKey != nil {
-		pubKeyEnc.V = base58.Encode(u.PublicKey[:])
-		pubKeyEnc.Valid = true
-	}
-	var privKeyHashEnc sql.Null[string]
-	if u.PrivateKey != nil {
-		privKeyHash := crypto.Hash("encryption key hash", u.PrivateKey[:])
-		privKeyHashEnc.V = base58.Encode(privKeyHash)
-		privKeyHashEnc.Valid = true
-		u.PrivateKeyHashEnc = privKeyHashEnc
-	}
-
 	timeNow := d.TimeNow().UTC()
 	if update {
 		var filter *types.Filter
@@ -52,11 +32,9 @@ func (u *User) Save(ctx context.Context, d types.Querier, update bool) error {
 			return errors.New("must provide either a user name or ID to update")
 		}
 
-		args := append([]any{timeNow, pubKeyEnc, privKeyHashEnc}, filter.Args...)
+		args := append([]any{timeNow}, filter.Args...)
 		updateStmt := fmt.Sprintf(`UPDATE users
-			SET updated_at = ?,
-				public_key = ?,
-				private_key_hash = ?
+			SET updated_at = ?
 			WHERE %s`, filter.Where)
 		res, err := d.ExecContext(ctx, updateStmt, args...)
 		if err != nil {
@@ -76,10 +54,9 @@ func (u *User) Save(ctx context.Context, d types.Querier, update bool) error {
 		u.UpdatedAt = timeNow
 	} else {
 		insertStmt := `INSERT INTO users
-		(id, created_at, updated_at, name, public_key, private_key_hash)
-		VALUES (NULL, ?, ?, ?, ?, ?)`
-		res, err := d.ExecContext(ctx, insertStmt, timeNow, timeNow, u.Name, pubKeyEnc,
-			privKeyHashEnc)
+		(id, created_at, updated_at, name)
+		VALUES (NULL, ?, ?, ?)`
+		res, err := d.ExecContext(ctx, insertStmt, timeNow, timeNow, u.Name)
 		if err != nil {
 			return types.Err("user", fmt.Sprintf("name '%s'", u.Name), err)
 		}
@@ -168,7 +145,7 @@ func (u *User) Delete(ctx context.Context, d types.Querier) error {
 // Users returns one or more users from the database. An optional filter can be
 // passed to limit the results.
 func Users(ctx context.Context, d types.Querier, filter *types.Filter) ([]*User, error) {
-	query := `SELECT u.id, u.created_at, u.updated_at, u.name, u.public_key, u.private_key_hash
+	query := `SELECT u.id, u.created_at, u.updated_at, u.name
 		FROM users u %s
 		ORDER BY u.name ASC`
 
@@ -186,36 +163,20 @@ func Users(ctx context.Context, d types.Querier, filter *types.Filter) ([]*User,
 		return nil, types.LoadError{ModelName: "users", Err: err}
 	}
 
-	var user *User
 	users := []*User{}
 	type row struct {
-		ID             uint64
-		CreatedAt      time.Time
-		UpdatedAt      time.Time
-		UserName       string
-		PubKeyEnc      sql.Null[string]
-		PrivKeyHashEnc sql.Null[string]
+		ID        uint64
+		CreatedAt time.Time
+		UpdatedAt time.Time
+		UserName  string
 	}
 	for rows.Next() {
-		r := row{}
-		err := rows.Scan(&r.ID, &r.CreatedAt, &r.UpdatedAt, &r.UserName, &r.PubKeyEnc, &r.PrivKeyHashEnc)
+		u := User{}
+		err := rows.Scan(&u.ID, &u.CreatedAt, &u.UpdatedAt, &u.Name)
 		if err != nil {
 			return nil, types.ScanError{ModelName: "user", Err: err}
 		}
-
-		if user == nil || user.Name != r.UserName {
-			user = &User{ID: r.ID, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, Name: r.UserName}
-			if r.PubKeyEnc.Valid {
-				if user.PublicKey, err = crypto.DecodeKey(r.PubKeyEnc.V); err != nil {
-					return nil, fmt.Errorf("failed decoding public key of user ID %d: %w", r.ID, err)
-				}
-			}
-			if r.PrivKeyHashEnc.Valid {
-				user.PrivateKeyHashEnc = r.PrivKeyHashEnc
-			}
-
-			users = append(users, user)
-		}
+		users = append(users, &u)
 	}
 
 	return users, nil
