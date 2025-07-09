@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -17,19 +16,19 @@ import (
 // The Invite command manages invitations for remote users.
 type Invite struct {
 	User struct {
-		Name string        `arg:"" help:"The name of the user to invite."`
-		TTL  time.Duration `default:"1h" help:"Time duration the invite is valid for."`
+		Name       string    `arg:"" help:"The name of the user to invite."`
+		Expiration time.Time `default:"1h" short:"e" type:"expiration" help:"Invite expiration as a time duration from now (e.g. 5m, 1h) or a future timestamp in RFC 3339 format (e.g. %s)."`
 	} `cmd:"" help:"Create a new invitation token for an existing user to access this Sesame node remotely."`
 	List struct {
-		All bool `help:"Also include expired invites."`
+		All bool `short:"a" help:"Also include expired invites."`
 	} `cmd:"" aliases:"ls" help:"List invites."`
 	Remove struct {
-		UUID []string `arg:"" help:"Unique invite IDs. A short prefix can be specified as long as it's unique."`
+		ID []string `arg:"" help:"Unique invite IDs. A short prefix can be specified as long as it is unique."`
 	} `cmd:"" aliases:"rm" help:"Delete one or more invites."`
 	Update struct {
-		UUID string         `arg:"" help:"The unique invite ID. A short prefix can be specified as long as it's unique."`
-		TTL  *time.Duration `help:"Time duration the invite is valid for."`
-	} `cmd:"" help:"Update an invite to extend its validity period."`
+		ID         string    `arg:"" help:"Unique invite ID. A short prefix can be specified as long as it is unique."`
+		Expiration time.Time `short:"e" type:"expiration" required:"" help:"Invite expiration as a time duration from now (e.g. 5m, 1h) or a future timestamp in RFC 3339 format (e.g. %s)."`
+	} `cmd:"" help:"Update an invite."`
 }
 
 // Run the invite command.
@@ -43,7 +42,7 @@ func (c *Invite) Run(kctx *kong.Context, appCtx *actx.Context) error {
 			return aerrors.NewRuntimeError(
 				fmt.Sprintf("failed loading user '%s'", c.User.Name), err, "")
 		}
-		inv, err := models.NewInvite(user, c.User.TTL, appCtx.UUIDGen(), appCtx.TimeNow)
+		inv, err := models.NewInvite(user, c.User.Expiration, appCtx.UUIDGen())
 		if err != nil {
 			return aerrors.NewRuntimeError(
 				fmt.Sprintf("failed creating invite for user '%s'", c.User.Name), err, "")
@@ -62,7 +61,7 @@ func (c *Invite) Run(kctx *kong.Context, appCtx *actx.Context) error {
 			inv.ExpiresAt.Local().Format(time.DateTime),
 			timeLeft.Round(time.Second))
 		fmt.Fprintf(appCtx.Stdout, `Token: %s
-Expires: %s
+Expires At: %s
 	`, token, expFmt)
 
 	case "invite list":
@@ -107,26 +106,21 @@ Expires: %s
 		}
 
 		if len(data) > 0 {
-			header := []string{"UUID", "User", "Token", "Expiration"}
+			header := []string{"ID", "User", "Token", "Expires At"}
 			newTable(header, data, appCtx.Stdout).Render()
 		}
 
-	case "invite remove":
+	case "invite remove <id>":
 		// TODO: Add a bulk deletion method?
-		for _, invUUID := range c.Remove.UUID {
+		for _, invUUID := range c.Remove.ID {
 			inv := &models.Invite{UUID: invUUID}
 			if err := inv.Delete(dbCtx, appCtx.DB); err != nil {
 				return err
 			}
 		}
 
-	case "invite update":
-		if c.Update.TTL == nil {
-			return errors.New("must set a valid TTL")
-		}
-
-		newExpiration := appCtx.TimeNow().UTC().Add(*c.Update.TTL)
-		inv := &models.Invite{UUID: c.Update.UUID, ExpiresAt: newExpiration}
+	case "invite update <id>":
+		inv := &models.Invite{UUID: c.Update.ID, ExpiresAt: c.Update.Expiration}
 		if err := inv.Save(dbCtx, appCtx.DB, true); err != nil {
 			return err
 		}

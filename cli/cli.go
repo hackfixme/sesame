@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/alecthomas/kong"
 
@@ -35,16 +36,25 @@ type CLI struct {
 }
 
 // New initializes the command-line interface.
-func New(configFilePath, dataDir, version string) (*CLI, error) {
+func New(appCtx *actx.Context, configFilePath, dataDir, version string) (*CLI, error) {
 	c := &CLI{}
 	kparser, err := kong.New(c,
 		kong.Name("sesame"),
 		kong.UsageOnError(),
 		kong.DefaultEnvars("SESAME"),
+		kong.NamedMapper("expiration", &ExpirationMapper{timeNow: appCtx.TimeNow}),
 		kong.ConfigureHelp(kong.HelpOptions{
 			Compact:             true,
 			Summary:             true,
 			NoExpandSubcommands: true,
+		}),
+		kong.ValueFormatter(func(value *kong.Value) string {
+			if value.Name == "expiration" {
+				y, m, d := appCtx.TimeNow().Date()
+				exampleExp := time.Date(y, m, d+1, 0, 0, 0, 0, appCtx.TimeNow().Location())
+				value.Help = fmt.Sprintf(value.OrigHelp, exampleExp.Format(time.RFC3339))
+			}
+			return value.Help
 		}),
 		kong.Vars{
 			"configFile": configFilePath,

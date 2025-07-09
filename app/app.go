@@ -64,7 +64,7 @@ func New(name, configFilePath, dataDir string, opts ...Option) (*App, error) {
 	app.ctx.UUIDGen = uuidgen
 
 	ver := fmt.Sprintf("%s %s", app.name, app.ctx.Version.String())
-	app.cli, err = cli.New(configFilePath, dataDir, ver)
+	app.cli, err = cli.New(app.ctx, configFilePath, dataDir, ver)
 	if err != nil {
 		return nil, err
 	}
