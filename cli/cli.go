@@ -14,6 +14,7 @@ import (
 // CLI is the command line interface of Sesame.
 type CLI struct {
 	Init    Init    `kong:"cmd,help='Create initial application artifacts.'"`
+	Invite  Invite  `kong:"cmd,help='Manage invitations for remote users.'"`
 	Open    Open    `kong:"cmd,help='Give clients access to services.'"`
 	Serve   Serve   `kong:"cmd,help='Start the web server.'"`
 	Service Service `kong:"cmd,help='Manage services.'"`
