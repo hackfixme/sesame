@@ -27,18 +27,18 @@ func (c *User) Run(kctx *kong.Context, appCtx *actx.Context) error {
 	case "user add <name>":
 		user := &models.User{Name: c.Add.Name}
 		if err := user.Save(dbCtx, appCtx.DB, false); err != nil {
-			return aerrors.NewRuntimeError("failed adding user", err, "")
+			return aerrors.NewWithCause("failed adding user", err)
 		}
 	case "user remove <name>":
 		user := &models.User{Name: c.Remove.Name}
 		err := user.Delete(dbCtx, appCtx.DB)
 		if err != nil {
-			return aerrors.NewRuntimeError("failed removing user", err, "")
+			return aerrors.NewWithCause("failed removing user", err)
 		}
 	case "user list":
 		users, err := models.Users(dbCtx, appCtx.DB, nil)
 		if err != nil {
-			return aerrors.NewRuntimeError("failed listing users", err, "")
+			return aerrors.NewWithCause("failed listing users", err)
 		}
 
 		data := make([][]string, len(users))

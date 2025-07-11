@@ -58,8 +58,7 @@ func New(name, configFilePath, dataDir string, opts ...Option) (*App, error) {
 
 	uuidgen, err := cuid2.Init(cuid2.WithLength(12))
 	if err != nil {
-		return nil, aerrors.NewRuntimeError(
-			"failed creating UUID generation function", err, "")
+		return nil, aerrors.NewWithCause("failed creating UUID generation function", err)
 	}
 	app.ctx.UUIDGen = uuidgen
 
@@ -117,8 +116,8 @@ func (app *App) Run(args []string) error {
 func (app *App) createDataDir(dir string) error {
 	err := app.ctx.FS.MkdirAll(dir, 0o700)
 	if err != nil {
-		return aerrors.NewRuntimeError(
-			fmt.Sprintf("failed creating app data directory '%s'", dir), err, "")
+		return aerrors.NewWithCause(
+			"failed creating app data directory", err, "directory", dir)
 	}
 	return nil
 }

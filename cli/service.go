@@ -37,11 +37,14 @@ type Service struct {
 func (c *Service) Run(kctx *kong.Context, appCtx *actx.Context) error {
 	// TODO: Update firewall rules.
 
-	var action string
+	var (
+		action  string
+		svcName string
+	)
 	switch kctx.Args[1] {
 	case "add":
 		if _, ok := appCtx.Config.Services[c.Add.Name]; ok {
-			return aerrors.NewRuntimeError(fmt.Sprintf("service '%s' already exists", c.Add.Name), nil, "")
+			return aerrors.NewWith("service already exists", "name", c.Add.Name)
 		}
 		appCtx.Config.Services[c.Add.Name] = svc.Service{
 			Name:              sql.Null[string]{V: c.Add.Name, Valid: true},
@@ -49,15 +52,17 @@ func (c *Service) Run(kctx *kong.Context, appCtx *actx.Context) error {
 			MaxAccessDuration: sql.Null[time.Duration]{V: c.Add.MaxAccessDuration, Valid: true},
 		}
 		action = "adding"
+		svcName = c.Add.Name
 	case "remove", "rm":
 		if _, ok := appCtx.Config.Services[c.Remove.Name]; !ok {
-			return aerrors.NewRuntimeError(fmt.Sprintf("service '%s' doesn't exist", c.Remove.Name), nil, "")
+			return aerrors.NewWith("service doesn't exist", "name", c.Remove.Name)
 		}
 		delete(appCtx.Config.Services, c.Remove.Name)
 		action = "removing"
+		svcName = c.Remove.Name
 	case "update":
 		if _, ok := appCtx.Config.Services[c.Update.Name]; !ok {
-			return aerrors.NewRuntimeError(fmt.Sprintf("service '%s' doesn't exist", c.Update.Name), nil, "")
+			return aerrors.NewWith("service doesn't exist", "name", c.Update.Name)
 		}
 		appCtx.Config.Services[c.Update.Name] = svc.Service{
 			Name:              sql.Null[string]{V: c.Update.Name, Valid: true},
@@ -65,6 +70,7 @@ func (c *Service) Run(kctx *kong.Context, appCtx *actx.Context) error {
 			MaxAccessDuration: sql.Null[time.Duration]{V: c.Update.MaxAccessDuration, Valid: true},
 		}
 		action = "updating"
+		svcName = c.Update.Name
 	case "list", "ls":
 		if len(appCtx.Config.Services) == 0 {
 			return nil
@@ -79,29 +85,29 @@ func (c *Service) Run(kctx *kong.Context, appCtx *actx.Context) error {
 		w := tabwriter.NewWriter(appCtx.Stdout, 6, 2, 2, ' ', 0)
 		_, err := fmt.Fprintln(w, "Name\tPort\tMax Access Duration")
 		if err != nil {
-			return aerrors.NewRuntimeError("failed writing to stdout", err, "")
+			return aerrors.NewWithCause("failed writing to stdout", err)
 		}
 		_, err = fmt.Fprintln(w, "----\t----\t-------------------")
 		if err != nil {
-			return aerrors.NewRuntimeError("failed writing to stdout", err, "")
+			return aerrors.NewWithCause("failed writing to stdout", err)
 		}
 		for _, svcName := range svcNames {
 			svc := appCtx.Config.Services[svcName]
 			_, err = fmt.Fprintf(w, "%s\t%d\t%s\n", svc.Name.V, svc.Port.V, svc.MaxAccessDuration.V)
 			if err != nil {
-				return aerrors.NewRuntimeError("failed writing to stdout", err, "")
+				return aerrors.NewWithCause("failed writing to stdout", err)
 			}
 		}
 		err = w.Flush()
 		if err != nil {
-			return aerrors.NewRuntimeError("failed flushing stdout writer", err, "")
+			return aerrors.NewWithCause("failed flushing stdout writer", err)
 		}
 
 		return nil
 	}
 
 	if err := appCtx.Config.Save(); err != nil {
-		return aerrors.NewRuntimeError(fmt.Sprintf("failed %s service %s", action, c.Add.Name), err, "")
+		return aerrors.NewWithCause(fmt.Sprintf("failed %s service", action), err, "name", svcName)
 	}
 
 	return nil

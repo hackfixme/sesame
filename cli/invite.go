@@ -40,22 +40,19 @@ func (c *Invite) Run(kctx *kong.Context, appCtx *actx.Context) error {
 	case "invite user <name>":
 		user := &models.User{Name: c.User.Name}
 		if err := user.Load(dbCtx, appCtx.DB); err != nil {
-			return aerrors.NewRuntimeError(
-				fmt.Sprintf("failed loading user '%s'", c.User.Name), err, "")
+			return aerrors.NewWithCause("failed loading user", err, "name", c.User.Name)
 		}
 		inv, err := models.NewInvite(user, c.User.Expiration, appCtx.UUIDGen())
 		if err != nil {
-			return aerrors.NewRuntimeError(
-				fmt.Sprintf("failed creating invite for user '%s'", c.User.Name), err, "")
+			return aerrors.NewWithCause("failed creating invite", err, "user_name", c.User.Name)
 		}
 
 		if err := inv.Save(dbCtx, appCtx.DB, false); err != nil {
-			return aerrors.NewRuntimeError(
-				"failed saving invite to the database", err, "")
+			return aerrors.NewWithCause("failed saving invite to the database", err)
 		}
 		token, err := inv.Token()
 		if err != nil {
-			return aerrors.NewRuntimeError("failed generating invitation token", err, "")
+			return aerrors.NewWithCause("failed generating invitation token", err)
 		}
 		timeLeft := inv.ExpiresAt.Sub(appCtx.TimeNow().UTC())
 		expFmt := fmt.Sprintf("%s (%s)",
@@ -73,7 +70,7 @@ Expires At: %s
 		}
 		invites, err := models.Invites(dbCtx, appCtx.DB, filter)
 		if err != nil {
-			return aerrors.NewRuntimeError("failed listing invites", err, "")
+			return aerrors.NewWithCause("failed listing invites", err)
 		}
 
 		expired, active := [][]string{}, [][]string{}
@@ -82,7 +79,7 @@ Expires At: %s
 
 			token, err := inv.Token()
 			if err != nil {
-				return aerrors.NewRuntimeError("failed generating invitation token", err, "")
+				return aerrors.NewWithCause("failed generating invitation token", err)
 			}
 
 			if timeLeft > 0 {

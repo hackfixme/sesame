@@ -31,8 +31,8 @@ func (c *Serve) Run(appCtx *actx.Context) error {
 		var err error
 		tlsCert, err = vfs.ReadFile(appCtx.FS, c.TLSCertFile)
 		if err != nil {
-			return aerrors.NewRuntimeError(
-				fmt.Sprintf("failed reading TLS certificate file '%s'", c.TLSCertFile), err, "")
+			return aerrors.NewWithCause(
+				"failed reading TLS certificate file", err, "path", c.TLSCertFile)
 		}
 	}
 
@@ -41,8 +41,8 @@ func (c *Serve) Run(appCtx *actx.Context) error {
 		var err error
 		tlsKey, err = vfs.ReadFile(appCtx.FS, c.TLSKeyFile)
 		if err != nil {
-			return aerrors.NewRuntimeError(
-				fmt.Sprintf("failed reading TLS private key file '%s'", c.TLSKeyFile), err, "")
+			return aerrors.NewWithCause(
+				"failed reading TLS private key file", err, "path", c.TLSKeyFile)
 		}
 	}
 

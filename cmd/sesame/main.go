@@ -34,11 +34,11 @@ func main() {
 		),
 	)
 	if err != nil {
-		aerrors.Errorf(err)
+		aerrors.Log(err)
 		os.Exit(1)
 	}
 	if err = a.Run(os.Args[1:]); err != nil {
-		aerrors.Errorf(err)
+		aerrors.Log(err)
 		os.Exit(1)
 	}
 }

@@ -19,8 +19,8 @@ type Open struct {
 // Run the open command.
 func (c *Open) Run(appCtx *actx.Context) error {
 	if !appCtx.Config.Firewall.Type.Valid {
-		return aerrors.NewRuntimeError(
-			"no firewall was configured on this system", nil, "Did you forget to run 'sesame init'?")
+		return aerrors.NewWith(
+			"no firewall was configured on this system", "hint", "Did you forget to run 'sesame init'?")
 	}
 
 	ipSet, err := firewall.ParseToIPSet(c.Clients...)

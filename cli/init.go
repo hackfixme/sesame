@@ -27,7 +27,7 @@ func (c *Init) Run(appCtx *actx.Context) error {
 		appCtx.Logger.Warn("The Sesame database is already initialized, skipping", "version", appCtx.VersionInit)
 	} else {
 		if err := initDB(appCtx); err != nil {
-			return aerrors.NewRuntimeError("failed initializing database", err, "")
+			return aerrors.NewWithCause("failed initializing database", err)
 		}
 	}
 
@@ -52,7 +52,7 @@ func (c *Init) Run(appCtx *actx.Context) error {
 	}
 
 	if err := appCtx.Config.Save(); err != nil {
-		return aerrors.NewRuntimeError("failed saving configuration", err, "")
+		return aerrors.NewWithCause("failed saving configuration", err)
 	}
 
 	return nil
