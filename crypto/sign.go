@@ -22,6 +22,8 @@ import (
 	"crypto/rand"
 	"crypto/sha512"
 	"io"
+
+	"golang.org/x/crypto/hkdf"
 )
 
 // NewHMACKey generates a random 256-bit secret key for HMAC use.
@@ -46,4 +48,20 @@ func GenerateHMAC(data []byte, key *[32]byte) []byte {
 func CheckHMAC(data, suppliedMAC []byte, key *[32]byte) bool {
 	expectedMAC := GenerateHMAC(data, key)
 	return hmac.Equal(expectedMAC, suppliedMAC)
+}
+
+// DeriveHMACKey derives a 256-bit HMAC key from a secret using HKDF-SHA512/256.
+// The secretKey should be cryptographically strong material (e.g. from ECDH).
+// The info parameter provides application-specific context to ensure key separation.
+// Returns an error if the key derivation process fails.
+func DeriveHMACKey(secretKey []byte, info []byte) (*[32]byte, error) {
+	hkdf := hkdf.New(sha512.New512_256, secretKey, nil, info)
+
+	key := &[32]byte{}
+	_, err := io.ReadFull(hkdf, key[:])
+	if err != nil {
+		return nil, err
+	}
+
+	return key, nil
 }
