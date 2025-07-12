@@ -65,7 +65,7 @@ func initDB(appCtx *actx.Context) error {
 		return err
 	}
 	rndSAN := base58.Encode(rndSANb)
-	tlsCert, tlsPrivKey, err := crypto.NewTLSCert(
+	tlsCert, err := crypto.NewTLSCert(
 		// TODO: Figure out certificate lifecycle management, make expiration configurable, etc.
 		"Sesame server", []string{rndSAN}, time.Now().Add(24*time.Hour), nil,
 	)
@@ -73,7 +73,12 @@ func initDB(appCtx *actx.Context) error {
 		return fmt.Errorf("failed generating the server TLS certificate: %w", err)
 	}
 
-	err = appCtx.DB.Init(appCtx.Version.Semantic, tlsCert.Raw, tlsPrivKey, rndSAN, appCtx.Logger)
+	tlsCertPEM, err := crypto.SerializeTLSCert(tlsCert)
+	if err != nil {
+		return fmt.Errorf("failed serializing the server TLS certificate: %w", err)
+	}
+
+	err = appCtx.DB.Init(appCtx.Version.Semantic, tlsCertPEM, appCtx.Logger)
 	if err != nil {
 		return err
 	}

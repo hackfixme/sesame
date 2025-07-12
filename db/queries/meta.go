@@ -9,29 +9,24 @@ import (
 	"go.hackfix.me/sesame/db/types"
 )
 
-func GetServerTLSInfo(ctx context.Context, d types.Querier) (
-	cert sql.Null[string], privKeyEnc sql.Null[[]byte], san sql.Null[string], err error,
+// GetServerTLSCert retrieves the server TLS certificate from the database. It
+// returns an error if its is missing or invalid.
+func GetServerTLSCert(ctx context.Context, d types.Querier) (
+	cert sql.Null[[]byte], err error,
 ) {
-	err = d.QueryRowContext(ctx,
-		`SELECT server_tls_cert, server_tls_key_enc, server_tls_san FROM _meta`).
-		Scan(&cert, &privKeyEnc, &san)
+	err = d.QueryRowContext(ctx, `SELECT server_tls_cert FROM _meta`).Scan(&cert)
 	if err != nil {
 		return
 	}
 
 	if !cert.Valid {
-		return cert, privKeyEnc, san, errors.New("server TLS certificate not found")
-	}
-	if !privKeyEnc.Valid {
-		return cert, privKeyEnc, san, errors.New("server TLS private key not found")
-	}
-	if !san.Valid {
-		return cert, privKeyEnc, san, errors.New("server TLS SAN not found")
+		return cert, errors.New("server TLS certificate not found")
 	}
 
 	return
 }
 
+// GetAllTables returns a map of all table names in the database that contain user data.
 func GetAllTables(ctx context.Context, d types.Querier) (map[string]struct{}, error) {
 	allTables := make(map[string]struct{})
 	rows, err := d.QueryContext(ctx, `SELECT name FROM sqlite_master WHERE type = 'table'`)
@@ -55,6 +50,9 @@ func GetAllTables(ctx context.Context, d types.Querier) (map[string]struct{}, er
 	return allTables, nil
 }
 
+// Version returns the Sesame application version the database was initialized
+// with. If the returned sql.Null value is invalid, it indicates that the
+// database hasn't been initialized.
 func Version(ctx context.Context, d types.Querier) (sql.Null[string], error) {
 	var version sql.Null[string]
 	err := d.QueryRowContext(ctx, `SELECT version FROM _meta`).

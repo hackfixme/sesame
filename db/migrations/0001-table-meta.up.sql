@@ -2,7 +2,5 @@ CREATE TABLE _meta (
   -- This is a key-value metadata table, so limit it to only one row.
   id                  INTEGER      PRIMARY KEY CHECK (id = 1),
   version             VARCHAR(32)  UNIQUE NOT NULL,
-  server_tls_cert     BLOB         UNIQUE NOT NULL,
-  server_tls_key      BLOB         UNIQUE NOT NULL,
-  server_tls_san      VARCHAR(32)  UNIQUE NOT NULL
+  server_tls_cert     BLOB         UNIQUE NOT NULL
 );

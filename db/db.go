@@ -31,8 +31,7 @@ var _ types.Querier = (*DB)(nil)
 
 // Init creates the database schema and initial records.
 func (d *DB) Init(
-	appVersion string, serverTLSCert, serverTLSKey []byte, serverTLSSAN string,
-	logger *slog.Logger,
+	appVersion string, serverTLSCert []byte, logger *slog.Logger,
 ) error {
 	dblogger := logger.With("path", d.path)
 	dblogger.Debug("initializing database")
@@ -43,8 +42,8 @@ func (d *DB) Init(
 	}
 
 	_, err = d.ExecContext(d.NewContext(),
-		`INSERT INTO _meta (version, server_tls_cert, server_tls_key, server_tls_san)
-		VALUES (?, ?, ?, ?)`, appVersion, serverTLSCert, serverTLSKey, serverTLSSAN)
+		`INSERT INTO _meta (version, server_tls_cert) VALUES (?, ?)`,
+		appVersion, serverTLSCert)
 	if err != nil {
 		return err
 	}
