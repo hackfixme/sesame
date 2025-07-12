@@ -13,11 +13,13 @@
 package crypto
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"math/big"
@@ -114,4 +116,92 @@ func NewTLSCert(
 	}
 
 	return cert, privKey, nil
+}
+
+// SerializeTLSCert converts a tls.Certificate to a single PEM-encoded byte slice
+// containing the certificate chain followed by the private key.
+func SerializeTLSCert(cert tls.Certificate) ([]byte, error) {
+	var buf bytes.Buffer
+
+	// Encode each certificate in the chain as a CERTIFICATE PEM block.
+	// The first certificate is the leaf, followed by any intermediates.
+	for _, certDER := range cert.Certificate {
+		if err := pem.Encode(&buf, &pem.Block{
+			Type:  "CERTIFICATE",
+			Bytes: certDER,
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	keyDER, err := x509.MarshalPKCS8PrivateKey(cert.PrivateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := pem.Encode(&buf, &pem.Block{
+		Type:  "PRIVATE KEY",
+		Bytes: keyDER,
+	}); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+// DeserializeTLSCert reconstructs a tls.Certificate from PEM-encoded data
+// containing certificate chain and private key blocks.
+// It expects one or more CERTIFICATE blocks followed by one PRIVATE KEY block.
+func DeserializeTLSCert(data []byte) (tls.Certificate, error) {
+	var (
+		certPEMs [][]byte
+		keyPEM   []byte
+	)
+
+	// Parse all PEM blocks from the input data.
+	for {
+		block, rest := pem.Decode(data)
+		if block == nil {
+			break // No more PEM blocks found
+		}
+
+		switch block.Type {
+		case "CERTIFICATE":
+			// Re-encode the certificate block to preserve PEM format
+			certPEMs = append(certPEMs, pem.EncodeToMemory(block))
+		case "PRIVATE KEY":
+			keyPEM = pem.EncodeToMemory(block)
+		}
+
+		data = rest
+	}
+
+	certChainPEM := bytes.Join(certPEMs, nil)
+
+	return tls.X509KeyPair(certChainPEM, keyPEM)
+}
+
+// ExtractCACert finds and returns the first CA certificate in the certificate
+// chain that clients can use to verify server certificates, or for signing purposes.
+func ExtractCACert(cert tls.Certificate) (*x509.Certificate, error) {
+	if len(cert.Certificate) == 0 {
+		return nil, errors.New("no certificate data found")
+	}
+
+	if cert.Leaf != nil && cert.Leaf.IsCA {
+		return cert.Leaf, nil
+	}
+
+	for _, certDER := range cert.Certificate {
+		x509Cert, err := x509.ParseCertificate(certDER)
+		if err != nil {
+			continue
+		}
+
+		if x509Cert.IsCA {
+			return x509Cert, nil
+		}
+	}
+
+	return nil, errors.New("no CA certificate found in chain")
 }
