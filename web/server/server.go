@@ -32,7 +32,7 @@ func New(appCtx *actx.Context, addr string, tlsCert, tlsPrivKey []byte) (*Server
 
 	srv := &Server{
 		Server: &http.Server{
-			Handler:           api.SetupHandlers(appCtx),
+			Handler:           SetupHandlers(appCtx),
 			Addr:              addr,
 			ReadHeaderTimeout: 10 * time.Second,
 			ReadTimeout:       30 * time.Second,
@@ -86,4 +86,11 @@ func defaultTLSConfig() *tls.Config {
 			tls.CurveID(tls.Ed25519),
 		},
 	}
+}
+
+// SetupHandlers configures the server HTTP handlers.
+func SetupHandlers(appCtx *actx.Context) http.Handler {
+	mux := http.NewServeMux()
+	mux.Handle("/api/v1/", http.StripPrefix("/api/v1", api.SetupHandlers(appCtx)))
+	return mux
 }
