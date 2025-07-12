@@ -8,7 +8,7 @@ import (
 	"time"
 
 	actx "go.hackfix.me/sesame/app/context"
-	"go.hackfix.me/sesame/web/api/v1"
+	"go.hackfix.me/sesame/web/server/api/v1"
 )
 
 // Server is a wrapper around http.Server with some custom behavior.
