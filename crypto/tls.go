@@ -41,24 +41,31 @@ func DefaultTLSConfig() *tls.Config {
 	}
 }
 
-// NewTLSCert creates an X.509 v3 certificate using the provided subjectName,
-// Subject Alternative Names and expiration date. If parent is nil, the
-// certificate is self-signed using a new Ed25519 private key; otherwise the
-// parent certificate is used to sign the new certificate (e.g. for client certs).
-// It returns the certificate and private key.
+// NewTLSCert creates an X.509 v3 certificate for TLS operations using the
+// provided subjectName, Subject Alternative Names and expiration date. If
+// parent is nil, the certificate is self-signed using a new Ed25519 private
+// key; otherwise the parent certificate is used to sign the new certificate
+// (e.g. for client certs).
 // Reference: https://eli.thegreenplace.net/2021/go-https-servers-with-tls/
 func NewTLSCert(
 	subjectName string, san []string, expiration time.Time, parent *tls.Certificate,
-) (*x509.Certificate, ed25519.PrivateKey, error) {
+) (tls.Certificate, error) {
+	var tlsCert tls.Certificate
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed generating serial number: %w", err)
+		return tlsCert, fmt.Errorf("failed generating serial number: %w", err)
 	}
 
-	var isCA bool
+	var (
+		isCA     bool
+		keyUsage x509.KeyUsage
+	)
 	if parent == nil {
 		isCA = true
+		keyUsage = x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign
+	} else {
+		keyUsage = x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature
 	}
 
 	template := x509.Certificate{
@@ -71,8 +78,7 @@ func NewTLSCert(
 		DNSNames:  san,
 		NotBefore: time.Now(),
 		NotAfter:  expiration,
-		KeyUsage: x509.KeyUsageKeyEncipherment |
-			x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		KeyUsage:  keyUsage,
 		ExtKeyUsage: []x509.ExtKeyUsage{
 			x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth,
 		},
@@ -81,41 +87,43 @@ func NewTLSCert(
 
 	pubKey, privKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed generating Ed25519 key pair: %w", err)
+		return tlsCert, fmt.Errorf("failed generating Ed25519 key pair: %w", err)
 	}
 
-	var (
-		certDER []byte
-		certErr error
-	)
+	var certDER []byte
 	if parent != nil {
-		if len(parent.Certificate) == 0 {
-			return nil, nil, errors.New("no certificate data found in parent certificate")
-		}
-
-		x509Cert, err := x509.ParseCertificate(parent.Certificate[0])
+		parentCert, err := ExtractCACert(*parent)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed parsing X.509 certificate from parent: %w", err)
+			return tlsCert, fmt.Errorf("failed to extract CA certificate from parent: %w", err)
 		}
 
 		// Client cert signed by the parent (CA) cert
-		certDER, certErr = x509.CreateCertificate(rand.Reader, &template,
-			x509Cert, pubKey, parent.PrivateKey)
+		certDER, err = x509.CreateCertificate(rand.Reader, &template,
+			parentCert, pubKey, parent.PrivateKey)
+		if err != nil {
+			return tlsCert, fmt.Errorf("failed creating X.509 certificate: %w", err)
+		}
 	} else {
 		// Self-signed cert used by the server (CA)
-		certDER, certErr = x509.CreateCertificate(rand.Reader, &template,
+		certDER, err = x509.CreateCertificate(rand.Reader, &template,
 			&template, pubKey, privKey)
-	}
-	if certErr != nil {
-		return nil, nil, fmt.Errorf("failed creating X.509 certificate: %w", certErr)
+		if err != nil {
+			return tlsCert, fmt.Errorf("failed creating X.509 certificate: %w", err)
+		}
 	}
 
-	cert, err := x509.ParseCertificate(certDER)
+	x509Cert, err := x509.ParseCertificate(certDER)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed parsing X.509 certificate from ASN.1 DER data: %w", certErr)
+		return tlsCert, fmt.Errorf("failed parsing X.509 certificate from ASN.1 DER data: %w", err)
 	}
 
-	return cert, privKey, nil
+	tlsCert = tls.Certificate{
+		Certificate: [][]byte{certDER},
+		PrivateKey:  privKey,
+		Leaf:        x509Cert,
+	}
+
+	return tlsCert, nil
 }
 
 // SerializeTLSCert converts a tls.Certificate to a single PEM-encoded byte slice
