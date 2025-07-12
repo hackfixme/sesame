@@ -2,6 +2,8 @@ package context
 
 import (
 	"context"
+	"crypto/tls"
+	"database/sql"
 	"io"
 	"log/slog"
 	"time"
@@ -9,7 +11,9 @@ import (
 	"github.com/mandelsoft/vfs/pkg/vfs"
 
 	cfg "go.hackfix.me/sesame/app/config"
+	"go.hackfix.me/sesame/crypto"
 	"go.hackfix.me/sesame/db"
+	"go.hackfix.me/sesame/db/queries"
 )
 
 // Context contains common objects used by the application. It is passed around
@@ -34,4 +38,15 @@ type Context struct {
 	// Metadata
 	Version     *VersionInfo
 	VersionInit string // app version the DB was initialized with
+}
+
+// ServerTLSCert returns the TLS certificate used by the Sesame web server.
+func (c *Context) ServerTLSCert() (tlsCert tls.Certificate, err error) {
+	var certNull sql.Null[[]byte]
+	certNull, err = queries.GetServerTLSCert(c.DB.NewContext(), c.DB)
+	if err != nil {
+		return
+	}
+
+	return crypto.DeserializeTLSCert(certNull.V)
 }
