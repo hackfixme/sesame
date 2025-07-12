@@ -16,5 +16,6 @@ func SetupHandlers(appCtx *actx.Context) http.Handler {
 	h := Handler{appCtx}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/open", h.OpenGet)
+	mux.HandleFunc("/join", h.RemoteJoin)
 	return mux
 }
