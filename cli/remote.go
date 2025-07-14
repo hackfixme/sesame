@@ -40,7 +40,7 @@ func (r *Remote) Run(kctx *kong.Context, appCtx *actx.Context) error {
 		clientCtx, cancelClientCtx := context.WithTimeout(appCtx.Ctx, 10*time.Second)
 		defer cancelClientCtx()
 
-		response, err := c.RemoteAuth(clientCtx, r.Add.Token)
+		response, err := c.Auth(clientCtx, r.Add.Token)
 		if err != nil {
 			return err
 		}

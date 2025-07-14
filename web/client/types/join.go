@@ -5,7 +5,8 @@ import (
 	"crypto/x509"
 )
 
-type RemoteAuthResponse struct {
+// AuthResponseData is the processed data returned by a successful join request.
+type AuthResponseData struct {
 	TLSCACert     *x509.Certificate
 	TLSClientCert *tls.Certificate
 }

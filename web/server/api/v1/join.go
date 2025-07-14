@@ -16,7 +16,7 @@ import (
 	"go.hackfix.me/sesame/web/server/types"
 )
 
-// RemoteJoin authenticates a remote Sesame node, giving it access to privileged
+// JoinPost authenticates a remote Sesame node, giving it access to privileged
 // operations on this node, such as changing firewall rules.
 //
 // The request is expected to contain an Authorization header with a
@@ -31,7 +31,7 @@ import (
 // secret key.
 //
 // See the inline comments for details about the process.
-func (h *Handler) RemoteJoin(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) JoinPost(w http.ResponseWriter, r *http.Request) {
 	// 1. Extract the nonce and HMAC from the token in Authorization header.
 	token := r.Header.Get("Authorization")
 	reqNonce, reqHMAC, err := common.DecodeToken(token)
@@ -115,7 +115,7 @@ func (h *Handler) RemoteJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := &types.RemoteJoinResponseData{
+	data := &types.JoinPostResponseData{
 		TLSCACert:     serverTLSCACert.Raw,
 		TLSClientCert: clientTLSCertPEM,
 	}

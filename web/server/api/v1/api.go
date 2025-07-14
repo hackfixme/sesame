@@ -15,7 +15,7 @@ type Handler struct {
 func SetupHandlers(appCtx *actx.Context) http.Handler {
 	h := Handler{appCtx}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/open", h.OpenGet)
-	mux.HandleFunc("/join", h.RemoteJoin)
+	mux.HandleFunc("POST /join", h.JoinPost)
+	mux.HandleFunc("POST /open", h.OpenPost)
 	return mux
 }
