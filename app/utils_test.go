@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
+	"log/slog"
 	"regexp"
 	"sync"
 	"testing"
@@ -15,6 +16,7 @@ import (
 
 	actx "go.hackfix.me/sesame/app/context"
 	"go.hackfix.me/sesame/db"
+	"go.hackfix.me/sesame/db/models"
 )
 
 var timeNow = time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -263,4 +265,21 @@ func (b *safeBuffer) Bytes() []byte {
 	b.mx.RLock()
 	defer b.mx.RUnlock()
 	return b.buf.Bytes()
+}
+
+func initTestDB(appCtx *actx.Context, services []*models.Service) error {
+	logger := slog.New(slog.DiscardHandler)
+	err := appCtx.DB.Init("test", []byte{}, logger)
+	if err != nil {
+		return err
+	}
+
+	dbCtx := appCtx.DB.NewContext()
+	for _, svc := range services {
+		if err := svc.Save(dbCtx, appCtx.DB, false); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

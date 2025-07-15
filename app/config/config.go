@@ -10,7 +10,6 @@ import (
 	"github.com/mandelsoft/vfs/pkg/vfs"
 
 	ftypes "go.hackfix.me/sesame/firewall/types"
-	svc "go.hackfix.me/sesame/service"
 )
 
 // Config represents the application configuration, backed by a filesystem for
@@ -18,7 +17,6 @@ import (
 type Config struct {
 	Firewall Firewall
 	Server   Server
-	Services map[string]svc.Service
 
 	fs   vfs.FileSystem
 	path string
@@ -87,9 +85,8 @@ type Firewall struct {
 }
 
 type cfgWrapper struct {
-	Firewall fwCfgWrapper          `json:"firewall"`
-	Server   srvCfgWrapper         `json:"server"`
-	Services map[string]svcWrapper `json:"services"`
+	Firewall fwCfgWrapper  `json:"firewall"`
+	Server   srvCfgWrapper `json:"server"`
 }
 type fwCfgWrapper struct {
 	Type                  string `json:"type,omitempty"`
@@ -106,9 +103,7 @@ type svcWrapper struct {
 // MarshalJSON implements custom JSON marshaling to convert sql.Null values
 // to their underlying types, omitting invalid/null fields from the output.
 func (c Config) MarshalJSON() ([]byte, error) {
-	w := cfgWrapper{
-		Services: make(map[string]svcWrapper),
-	}
+	w := cfgWrapper{}
 
 	if c.Firewall.Type.Valid {
 		w.Firewall.Type = string(c.Firewall.Type.V)
@@ -119,13 +114,6 @@ func (c Config) MarshalJSON() ([]byte, error) {
 
 	if c.Server.Address.Valid {
 		w.Server.Address = c.Server.Address.V
-	}
-
-	for name, svc := range c.Services {
-		w.Services[name] = svcWrapper{
-			Port:              svc.Port.V,
-			MaxAccessDuration: svc.MaxAccessDuration.V.String(),
-		}
 	}
 
 	//nolint:wrapcheck // This is fine.
@@ -158,21 +146,6 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 
 	if w.Server.Address != "" {
 		c.Server.Address = sql.Null[string]{V: w.Server.Address, Valid: true}
-	}
-
-	c.Services = make(map[string]svc.Service)
-
-	for name, s := range w.Services {
-		maxDuration, err := time.ParseDuration(s.MaxAccessDuration)
-		if err != nil {
-			return fmt.Errorf("invalid duration for service %s: %w", name, err)
-		}
-
-		c.Services[name] = svc.Service{
-			Name:              sql.Null[string]{V: name, Valid: true},
-			Port:              sql.Null[uint16]{V: s.Port, Valid: true},
-			MaxAccessDuration: sql.Null[time.Duration]{V: maxDuration, Valid: true},
-		}
 	}
 
 	return nil

@@ -1,0 +1,8 @@
+CREATE TABLE services (
+  id                  INTEGER      NOT NULL PRIMARY KEY,
+  created_at          TIMESTAMP    NOT NULL,
+  updated_at          TIMESTAMP    NOT NULL,
+  name                VARCHAR(32)  UNIQUE NOT NULL,
+  port                INTEGER      NOT NULL,
+  max_access_duration VARCHAR(16)
+);

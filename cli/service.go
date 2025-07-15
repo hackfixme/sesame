@@ -1,18 +1,16 @@
 package cli
 
 import (
-	"database/sql"
 	"errors"
-	"fmt"
-	"slices"
-	"text/tabwriter"
+	"strconv"
 	"time"
 
 	"github.com/alecthomas/kong"
 
 	actx "go.hackfix.me/sesame/app/context"
 	aerrors "go.hackfix.me/sesame/app/errors"
-	svc "go.hackfix.me/sesame/service"
+	"go.hackfix.me/sesame/db/models"
+	"go.hackfix.me/sesame/xtime"
 )
 
 // Service manages the services clients are allowed to access.
@@ -21,93 +19,62 @@ type Service struct {
 		Name              string        `arg:"" help:"Service name."`
 		Port              portField     `arg:"" help:"Service port."`
 		MaxAccessDuration time.Duration `default:"1h" help:"The maximum access duration per client."`
-	} `kong:"cmd,help='Add a new service.'"`
+	} `cmd:"" help:"Add a new service."`
 	Remove struct {
 		Name string `arg:"" help:"Service name."`
-	} `kong:"cmd,help='Remove a service.',aliases='rm'"`
+	} `cmd:"" aliases:"rm" help:"Remove a service."`
 	Update struct {
 		Name              string        `arg:"" help:"Service name."`
 		Port              portField     `arg:"" help:"Service port."`
-		MaxAccessDuration time.Duration `default:"1h" help:"The maximum access duration per client."`
-	} `kong:"cmd,help='Update a service.'"`
-	List struct{} `kong:"cmd,help='List all services.',aliases='ls'"`
+		MaxAccessDuration time.Duration `required:"" help:"The maximum access duration per client."`
+	} `cmd:"" help:"Update a service."`
+	List struct{} `cmd:"" aliases:"ls" help:"List all services."`
 }
 
 // Run the service command.
 func (c *Service) Run(kctx *kong.Context, appCtx *actx.Context) error {
 	// TODO: Update firewall rules.
+	dbCtx := appCtx.DB.NewContext()
 
-	var (
-		action  string
-		svcName string
-	)
-	switch kctx.Args[1] {
-	case "add":
-		if _, ok := appCtx.Config.Services[c.Add.Name]; ok {
-			return aerrors.NewWith("service already exists", "name", c.Add.Name)
+	switch kctx.Command() {
+	case "service add <name> <port>":
+		svc := &models.Service{
+			Name:              c.Add.Name,
+			Port:              uint16(c.Add.Port),
+			MaxAccessDuration: c.Add.MaxAccessDuration,
 		}
-		appCtx.Config.Services[c.Add.Name] = svc.Service{
-			Name:              sql.Null[string]{V: c.Add.Name, Valid: true},
-			Port:              sql.Null[uint16]{V: uint16(c.Add.Port), Valid: true},
-			MaxAccessDuration: sql.Null[time.Duration]{V: c.Add.MaxAccessDuration, Valid: true},
+		if err := svc.Save(dbCtx, appCtx.DB, false); err != nil {
+			return aerrors.NewWithCause("failed adding service", err)
 		}
-		action = "adding"
-		svcName = c.Add.Name
-	case "remove", "rm":
-		if _, ok := appCtx.Config.Services[c.Remove.Name]; !ok {
-			return aerrors.NewWith("service doesn't exist", "name", c.Remove.Name)
+	case "service remove <name>":
+		svc := &models.Service{Name: c.Remove.Name}
+		if err := svc.Delete(dbCtx, appCtx.DB); err != nil {
+			return aerrors.NewWithCause("failed removing service", err)
 		}
-		delete(appCtx.Config.Services, c.Remove.Name)
-		action = "removing"
-		svcName = c.Remove.Name
-	case "update":
-		if _, ok := appCtx.Config.Services[c.Update.Name]; !ok {
-			return aerrors.NewWith("service doesn't exist", "name", c.Update.Name)
+	case "service update <name> <port>":
+		svc := &models.Service{
+			Name:              c.Update.Name,
+			Port:              uint16(c.Update.Port),
+			MaxAccessDuration: c.Update.MaxAccessDuration,
 		}
-		appCtx.Config.Services[c.Update.Name] = svc.Service{
-			Name:              sql.Null[string]{V: c.Update.Name, Valid: true},
-			Port:              sql.Null[uint16]{V: uint16(c.Update.Port), Valid: true},
-			MaxAccessDuration: sql.Null[time.Duration]{V: c.Update.MaxAccessDuration, Valid: true},
+		if err := svc.Save(dbCtx, appCtx.DB, true); err != nil {
+			return aerrors.NewWithCause("failed updating service", err)
 		}
-		action = "updating"
-		svcName = c.Update.Name
-	case "list", "ls":
-		if len(appCtx.Config.Services) == 0 {
-			return nil
-		}
-
-		svcNames := make([]string, 0, len(appCtx.Config.Services))
-		for svcName := range appCtx.Config.Services {
-			svcNames = append(svcNames, svcName)
-		}
-		slices.Sort(svcNames)
-
-		w := tabwriter.NewWriter(appCtx.Stdout, 6, 2, 2, ' ', 0)
-		_, err := fmt.Fprintln(w, "Name\tPort\tMax Access Duration")
+	case "service list":
+		services, err := models.Services(dbCtx, appCtx.DB, nil)
 		if err != nil {
-			return aerrors.NewWithCause("failed writing to stdout", err)
-		}
-		_, err = fmt.Fprintln(w, "----\t----\t-------------------")
-		if err != nil {
-			return aerrors.NewWithCause("failed writing to stdout", err)
-		}
-		for _, svcName := range svcNames {
-			svc := appCtx.Config.Services[svcName]
-			_, err = fmt.Fprintf(w, "%s\t%d\t%s\n", svc.Name.V, svc.Port.V, svc.MaxAccessDuration.V)
-			if err != nil {
-				return aerrors.NewWithCause("failed writing to stdout", err)
-			}
-		}
-		err = w.Flush()
-		if err != nil {
-			return aerrors.NewWithCause("failed flushing stdout writer", err)
+			return aerrors.NewWithCause("failed querying services", err)
 		}
 
-		return nil
-	}
+		data := make([][]string, len(services))
+		for i, svc := range services {
+			data[i] = []string{svc.Name, strconv.Itoa(int(svc.Port)), xtime.FormatDuration(svc.MaxAccessDuration, time.Second)}
+		}
 
-	if err := appCtx.Config.Save(); err != nil {
-		return aerrors.NewWithCause(fmt.Sprintf("failed %s service", action), err, "name", svcName)
+		if len(data) > 0 {
+			header := []string{"Name", "Port", "Max Access Duration"}
+			newTable(header, data, appCtx.Stdout).Render()
+		}
 	}
 
 	return nil

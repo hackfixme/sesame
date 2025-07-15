@@ -58,7 +58,13 @@ func (h *Handler) OpenPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = fwMgr.AllowAccess(ipSet, reqData.ServiceName, reqData.Duration)
+	svc := &models.Service{Name: reqData.ServiceName}
+	if err := svc.Load(h.appCtx.DB.NewContext(), h.appCtx.DB); err != nil {
+		_ = util.WriteJSON(w, types.NewBadRequestError(err.Error()))
+		return
+	}
+
+	err = fwMgr.AllowAccess(ipSet, svc, reqData.Duration)
 	if err != nil {
 		_ = util.WriteJSON(w, types.NewBadRequestError(err.Error()))
 		return

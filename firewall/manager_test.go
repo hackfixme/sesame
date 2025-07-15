@@ -1,7 +1,6 @@
 package firewall_test
 
 import (
-	"database/sql"
 	"errors"
 	"log/slog"
 	"testing"
@@ -10,10 +9,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"go.hackfix.me/sesame/db/models"
 	"go.hackfix.me/sesame/firewall"
 	"go.hackfix.me/sesame/firewall/mock"
 	"go.hackfix.me/sesame/firewall/types"
-	svc "go.hackfix.me/sesame/service"
 )
 
 func TestNewManager(t *testing.T) {
@@ -41,8 +40,7 @@ func TestNewManager(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			services := make(map[string]svc.Service)
-			manager, err := firewall.NewManager(tt.firewall, services)
+			manager, err := firewall.NewManager(tt.firewall)
 
 			if tt.expErr != "" {
 				require.Error(t, err)
@@ -60,8 +58,7 @@ func TestNewManager(t *testing.T) {
 
 		logger := slog.New(slog.DiscardHandler)
 		mockFirewall := mock.New(time.Now, logger)
-		services := make(map[string]svc.Service)
-		manager, err := firewall.NewManager(mockFirewall, services, firewall.WithLogger(logger))
+		manager, err := firewall.NewManager(mockFirewall, firewall.WithLogger(logger))
 		require.NoError(t, err)
 		assert.NotNil(t, manager)
 	})
@@ -70,71 +67,44 @@ func TestNewManager(t *testing.T) {
 func TestManager_AllowAccess(t *testing.T) {
 	t.Parallel()
 
-	services := map[string]svc.Service{
-		"web": {
-			Name:              sql.Null[string]{V: "web", Valid: true},
-			Port:              sql.Null[uint16]{V: 80, Valid: true},
-			MaxAccessDuration: sql.Null[time.Duration]{V: 1 * time.Hour, Valid: true},
-		},
-		"db": {
-			Name:              sql.Null[string]{V: "db", Valid: true},
-			Port:              sql.Null[uint16]{V: 5432, Valid: true},
-			MaxAccessDuration: sql.Null[time.Duration]{V: 30 * time.Minute, Valid: true},
-		},
-	}
-
 	tests := []struct {
-		name        string
-		ipAddr      []string
-		serviceName string
-		duration    time.Duration
-		setupError  bool
-		expErr      string
+		name       string
+		ipAddr     []string
+		duration   time.Duration
+		setupError bool
+		expErr     string
 	}{
 		{
-			name:        "ok/single_ip",
-			ipAddr:      []string{"192.168.1.100"},
-			serviceName: "web",
-			duration:    30 * time.Minute,
+			name:     "ok/single_ip",
+			ipAddr:   []string{"192.168.1.100"},
+			duration: 30 * time.Minute,
 		},
 		{
-			name:        "ok/multiple_ips",
-			ipAddr:      []string{"192.168.1.100", "10.0.0.5"},
-			serviceName: "web",
-			duration:    30 * time.Minute,
+			name:     "ok/multiple_ips",
+			ipAddr:   []string{"192.168.1.100", "10.0.0.5"},
+			duration: 30 * time.Minute,
 		},
 		{
-			name:        "ok/cidr_notation",
-			ipAddr:      []string{"192.168.1.0/24"},
-			serviceName: "web",
-			duration:    30 * time.Minute,
+			name:     "ok/cidr_notation",
+			ipAddr:   []string{"192.168.1.0/24"},
+			duration: 30 * time.Minute,
 		},
 		{
-			name:        "ok/ip_range",
-			ipAddr:      []string{"192.168.1.1-192.168.1.10"},
-			serviceName: "web",
-			duration:    30 * time.Minute,
+			name:     "ok/ip_range",
+			ipAddr:   []string{"192.168.1.1-192.168.1.10"},
+			duration: 30 * time.Minute,
 		},
 		{
-			name:        "ok/duration_limited_by_service_max",
-			ipAddr:      []string{"192.168.1.100"},
-			serviceName: "db",
-			duration:    2 * time.Hour,
+			name:     "ok/duration_limited_by_service_max",
+			ipAddr:   []string{"192.168.1.100"},
+			duration: 2 * time.Hour,
 		},
 		{
-			name:        "err/unknown_service",
-			ipAddr:      []string{"192.168.1.100"},
-			serviceName: "unknown",
-			duration:    30 * time.Minute,
-			expErr:      "unknown service: unknown",
-		},
-		{
-			name:        "err/firewall_allow_fails",
-			ipAddr:      []string{"192.168.1.100"},
-			serviceName: "web",
-			duration:    30 * time.Minute,
-			setupError:  true,
-			expErr:      "failed creating access for client IP range",
+			name:       "err/firewall_allow_fails",
+			ipAddr:     []string{"192.168.1.100"},
+			duration:   30 * time.Minute,
+			setupError: true,
+			expErr:     "failed creating access for client IP range",
 		},
 	}
 
@@ -146,8 +116,7 @@ func TestManager_AllowAccess(t *testing.T) {
 			// For the firewall allow failure test, we need to create the manager first
 			// (without error) then set the error for the Allow operation.
 			manager, err := firewall.NewManager(
-				mockFirewall, services,
-				firewall.WithLogger(slog.New(slog.DiscardHandler)),
+				mockFirewall, firewall.WithLogger(slog.New(slog.DiscardHandler)),
 			)
 			require.NoError(t, err)
 
@@ -158,7 +127,8 @@ func TestManager_AllowAccess(t *testing.T) {
 			ipSet, err := firewall.ParseToIPSet(tt.ipAddr...)
 			require.NoError(t, err)
 
-			err = manager.AllowAccess(ipSet, tt.serviceName, tt.duration)
+			svc := &models.Service{Name: "web", Port: 8080, MaxAccessDuration: time.Hour}
+			err = manager.AllowAccess(ipSet, svc, tt.duration)
 			if tt.expErr != "" {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tt.expErr)
@@ -170,11 +140,10 @@ func TestManager_AllowAccess(t *testing.T) {
 				ports, exists := mockFirewall.Allowed[ipRange.String()]
 				assert.True(t, exists, "IP range %s should be in allowed list", ipRange)
 
-				expectedService := services[tt.serviceName]
-				expectedDuration := min(tt.duration, expectedService.MaxAccessDuration.V)
+				expectedDuration := min(tt.duration, svc.MaxAccessDuration)
 				expectedExpiry := timeNow.Add(expectedDuration)
-				actualExpiry, portExists := ports[expectedService.Port.V]
-				assert.True(t, portExists, "Port %d should be allowed for IP range %s", expectedService.Port.V, ipRange)
+				actualExpiry, portExists := ports[svc.Port]
+				assert.True(t, portExists, "Port %d should be allowed for IP range %s", svc.Port, ipRange)
 				assert.Equal(t, expectedExpiry, actualExpiry)
 			}
 		})

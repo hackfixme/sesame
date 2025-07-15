@@ -31,14 +31,13 @@ func (c *User) Run(kctx *kong.Context, appCtx *actx.Context) error {
 		}
 	case "user remove <name>":
 		user := &models.User{Name: c.Remove.Name}
-		err := user.Delete(dbCtx, appCtx.DB)
-		if err != nil {
+		if err := user.Delete(dbCtx, appCtx.DB); err != nil {
 			return aerrors.NewWithCause("failed removing user", err)
 		}
 	case "user list":
 		users, err := models.Users(dbCtx, appCtx.DB, nil)
 		if err != nil {
-			return aerrors.NewWithCause("failed listing users", err)
+			return aerrors.NewWithCause("failed querying users", err)
 		}
 
 		data := make([][]string, len(users))

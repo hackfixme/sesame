@@ -3,6 +3,7 @@ package app
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -10,41 +11,16 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"go.hackfix.me/sesame/app/config"
+	aerrors "go.hackfix.me/sesame/app/errors"
+	"go.hackfix.me/sesame/db/models"
 	ftypes "go.hackfix.me/sesame/firewall/types"
-	svc "go.hackfix.me/sesame/service"
 )
 
 func TestAppOpen(t *testing.T) {
 	t.Parallel()
 
-	services := map[string]svc.Service{
-		"web": {
-			Name:              sql.Null[string]{V: "web", Valid: true},
-			Port:              sql.Null[uint16]{V: 80, Valid: true},
-			MaxAccessDuration: sql.Null[time.Duration]{V: time.Hour, Valid: true},
-		},
-		"db": {
-			Name:              sql.Null[string]{V: "db", Valid: true},
-			Port:              sql.Null[uint16]{V: 5432, Valid: true},
-			MaxAccessDuration: sql.Null[time.Duration]{V: 30 * time.Minute, Valid: true},
-		},
-	}
-	cfgOK := config.Config{
-		Firewall: config.Firewall{
-			Type: sql.Null[ftypes.FirewallType]{V: ftypes.FirewallMock, Valid: true},
-		},
-		Services: services,
-	}
-
-	cfgNoServices := config.Config{
-		Firewall: config.Firewall{
-			Type: sql.Null[ftypes.FirewallType]{V: ftypes.FirewallMock, Valid: true},
-		},
-	}
-
 	tests := []struct {
 		name           string
-		config         config.Config
 		svcName        string
 		clients        []string
 		accessDuration time.Duration
@@ -53,7 +29,6 @@ func TestAppOpen(t *testing.T) {
 	}{
 		{
 			name:           "ok/multiple_mixed",
-			config:         cfgOK,
 			svcName:        "web",
 			clients:        []string{"192.168.1.1", "10.0.0.0/8", "172.16.1.1-172.16.1.100", "2001:db8::/32"},
 			accessDuration: 30 * time.Minute,
@@ -68,41 +43,58 @@ func TestAppOpen(t *testing.T) {
 		},
 		{
 			name:    "err/no_clients",
-			config:  cfgNoServices,
 			svcName: "web",
 			clients: []string{},
 			expErr:  `failed parsing CLI arguments: expected "<clients> ..."`,
 		},
 		{
 			name:    "err/invalid_client",
-			config:  cfgNoServices,
 			svcName: "web",
 			clients: []string{"not.an.ip"},
 			expErr:  "failed parsing IP address 'not.an.ip'",
 		},
 		{
 			name:    "err/unknown_service",
-			config:  cfgNoServices,
-			svcName: "web",
+			svcName: "blah",
 			clients: []string{"192.168.1.1"},
-			expErr:  "unknown service: web",
+			expErr:  "unknown service",
+		},
+	}
+
+	services := []*models.Service{
+		{
+			Name:              "web",
+			Port:              uint16(80),
+			MaxAccessDuration: time.Hour,
+		},
+		{
+			Name:              "db",
+			Port:              uint16(5432),
+			MaxAccessDuration: 30 * time.Minute,
+		},
+	}
+
+	cfg := config.Config{
+		Firewall: config.Firewall{
+			Type: sql.Null[ftypes.FirewallType]{V: ftypes.FirewallMock, Valid: true},
 		},
 	}
 
 	for _, tt := range tests {
 		args := []string{"open"}
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
 			tctx, cancel, h := newTestContext(t, 5*time.Second)
 			defer cancel()
 
 			app, err := newTestApp(tctx)
 			h(assert.NoError(t, err))
 
-			cfgJSON, err := json.Marshal(tt.config)
+			cfgJSON, err := json.Marshal(cfg)
 			h(assert.NoError(t, err))
 			err = vfs.WriteFile(app.ctx.FS, "/config.json", cfgJSON, 0o644)
+			h(assert.NoError(t, err))
+
+			err = initTestDB(app.ctx, services)
 			h(assert.NoError(t, err))
 
 			args = append(args,
@@ -135,108 +127,122 @@ func TestAppService(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		args      []string
-		expStdout string
-		expStderr string
-		expErr    string
-		expConfig config.Config
+		name        string
+		args        []string
+		expStdout   string
+		expStderr   string
+		expErr      string
+		expServices []*models.Service
 	}{
 		{
 			name: "ok/add_basic",
 			args: []string{"add", "web", "80"},
-			expConfig: config.Config{
-				Services: map[string]svc.Service{
-					"web": {
-						Name:              sql.Null[string]{V: "web", Valid: true},
-						Port:              sql.Null[uint16]{V: 80, Valid: true},
-						MaxAccessDuration: sql.Null[time.Duration]{V: time.Hour, Valid: true},
-					},
+			expServices: []*models.Service{
+				{
+					ID:                1,
+					CreatedAt:         timeNow,
+					UpdatedAt:         timeNow,
+					Name:              "web",
+					Port:              uint16(80),
+					MaxAccessDuration: time.Hour,
 				},
 			},
 		},
 		{
 			name: "ok/add_custom_access_duration",
 			args: []string{"add", "db", "5432", "--max-access-duration", "30m"},
-			expConfig: config.Config{
-				Services: map[string]svc.Service{
-					"web": {
-						Name:              sql.Null[string]{V: "web", Valid: true},
-						Port:              sql.Null[uint16]{V: 80, Valid: true},
-						MaxAccessDuration: sql.Null[time.Duration]{V: time.Hour, Valid: true},
-					},
-					"db": {
-						Name:              sql.Null[string]{V: "db", Valid: true},
-						Port:              sql.Null[uint16]{V: 5432, Valid: true},
-						MaxAccessDuration: sql.Null[time.Duration]{V: 30 * time.Minute, Valid: true},
-					},
+			expServices: []*models.Service{
+				{
+					ID:                2,
+					CreatedAt:         timeNow,
+					UpdatedAt:         timeNow,
+					Name:              "db",
+					Port:              uint16(5432),
+					MaxAccessDuration: 30 * time.Minute,
+				},
+				{
+					ID:                1,
+					CreatedAt:         timeNow,
+					UpdatedAt:         timeNow,
+					Name:              "web",
+					Port:              uint16(80),
+					MaxAccessDuration: time.Hour,
 				},
 			},
 		},
 		{
 			name: "ok/update",
 			args: []string{"update", "web", "8080", "--max-access-duration", "5m"},
-			expConfig: config.Config{
-				Services: map[string]svc.Service{
-					"web": {
-						Name:              sql.Null[string]{V: "web", Valid: true},
-						Port:              sql.Null[uint16]{V: 8080, Valid: true},
-						MaxAccessDuration: sql.Null[time.Duration]{V: 5 * time.Minute, Valid: true},
-					},
-					"db": {
-						Name:              sql.Null[string]{V: "db", Valid: true},
-						Port:              sql.Null[uint16]{V: 5432, Valid: true},
-						MaxAccessDuration: sql.Null[time.Duration]{V: 30 * time.Minute, Valid: true},
-					},
+			expServices: []*models.Service{
+				{
+					ID:                2,
+					CreatedAt:         timeNow,
+					UpdatedAt:         timeNow,
+					Name:              "db",
+					Port:              uint16(5432),
+					MaxAccessDuration: 30 * time.Minute,
+				},
+				{
+					ID:                1,
+					CreatedAt:         timeNow,
+					UpdatedAt:         timeNow,
+					Name:              "web",
+					Port:              uint16(8080),
+					MaxAccessDuration: 5 * time.Minute,
 				},
 			},
 		},
 		{
 			name: "ok/list",
 			args: []string{"list"},
-			expConfig: config.Config{
-				Services: map[string]svc.Service{
-					"web": {
-						Name:              sql.Null[string]{V: "web", Valid: true},
-						Port:              sql.Null[uint16]{V: 8080, Valid: true},
-						MaxAccessDuration: sql.Null[time.Duration]{V: 5 * time.Minute, Valid: true},
-					},
-					"db": {
-						Name:              sql.Null[string]{V: "db", Valid: true},
-						Port:              sql.Null[uint16]{V: 5432, Valid: true},
-						MaxAccessDuration: sql.Null[time.Duration]{V: 30 * time.Minute, Valid: true},
-					},
+			expServices: []*models.Service{
+				{
+					ID:                2,
+					CreatedAt:         timeNow,
+					UpdatedAt:         timeNow,
+					Name:              "db",
+					Port:              uint16(5432),
+					MaxAccessDuration: 30 * time.Minute,
+				},
+				{
+					ID:                1,
+					CreatedAt:         timeNow,
+					UpdatedAt:         timeNow,
+					Name:              "web",
+					Port:              uint16(8080),
+					MaxAccessDuration: 5 * time.Minute,
 				},
 			},
 			expStdout: "" +
-				"Name  Port  Max Access Duration\n" +
-				"----  ----  -------------------\n" +
-				"db    5432  30m0s\n" +
-				"web   8080  5m0s\n",
+				" NAME  PORT  MAX ACCESS DURATION \n" +
+				" db    5432  30m                 \n" +
+				" web   8080  5m                  \n",
 		},
 		{
 			name: "ok/remove_1",
 			args: []string{"remove", "web"},
-			expConfig: config.Config{
-				Services: map[string]svc.Service{
-					"db": {
-						Name:              sql.Null[string]{V: "db", Valid: true},
-						Port:              sql.Null[uint16]{V: 5432, Valid: true},
-						MaxAccessDuration: sql.Null[time.Duration]{V: 30 * time.Minute, Valid: true},
-					},
+			expServices: []*models.Service{
+				{
+					ID:                2,
+					CreatedAt:         timeNow,
+					UpdatedAt:         timeNow,
+					Name:              "db",
+					Port:              uint16(5432),
+					MaxAccessDuration: 30 * time.Minute,
 				},
 			},
 		},
 		{
 			name: "err/invalid_port",
 			args: []string{"add", "web", "0"},
-			expConfig: config.Config{
-				Services: map[string]svc.Service{
-					"db": {
-						Name:              sql.Null[string]{V: "db", Valid: true},
-						Port:              sql.Null[uint16]{V: 5432, Valid: true},
-						MaxAccessDuration: sql.Null[time.Duration]{V: 30 * time.Minute, Valid: true},
-					},
+			expServices: []*models.Service{
+				{
+					ID:                2,
+					CreatedAt:         timeNow,
+					UpdatedAt:         timeNow,
+					Name:              "db",
+					Port:              uint16(5432),
+					MaxAccessDuration: 30 * time.Minute,
 				},
 			},
 			expErr: "failed parsing CLI arguments: <port>: must be greater than 0",
@@ -244,54 +250,57 @@ func TestAppService(t *testing.T) {
 		{
 			name: "err/service_exists",
 			args: []string{"add", "db", "5000"},
-			expConfig: config.Config{
-				Services: map[string]svc.Service{
-					"db": {
-						Name:              sql.Null[string]{V: "db", Valid: true},
-						Port:              sql.Null[uint16]{V: 5432, Valid: true},
-						MaxAccessDuration: sql.Null[time.Duration]{V: 30 * time.Minute, Valid: true},
-					},
+			expServices: []*models.Service{
+				{
+					ID:                2,
+					CreatedAt:         timeNow,
+					UpdatedAt:         timeNow,
+					Name:              "db",
+					Port:              uint16(5432),
+					MaxAccessDuration: 30 * time.Minute,
 				},
 			},
-			expErr: "service already exists",
+			expErr: "service with name 'db' already exists",
 		},
 		{
 			name: "err/remove_service_doesnot_exist",
 			args: []string{"remove", "web"},
-			expConfig: config.Config{
-				Services: map[string]svc.Service{
-					"db": {
-						Name:              sql.Null[string]{V: "db", Valid: true},
-						Port:              sql.Null[uint16]{V: 5432, Valid: true},
-						MaxAccessDuration: sql.Null[time.Duration]{V: 30 * time.Minute, Valid: true},
-					},
+			expServices: []*models.Service{
+				{
+					ID:                2,
+					CreatedAt:         timeNow,
+					UpdatedAt:         timeNow,
+					Name:              "db",
+					Port:              uint16(5432),
+					MaxAccessDuration: 30 * time.Minute,
 				},
 			},
-			expErr: "service doesn't exist",
+			expErr: "service with name 'web' doesn't exist",
 		},
 		{
 			name: "err/update_service_doesnot_exist",
 			args: []string{"update", "web", "5000"},
-			expConfig: config.Config{
-				Services: map[string]svc.Service{
-					"db": {
-						Name:              sql.Null[string]{V: "db", Valid: true},
-						Port:              sql.Null[uint16]{V: 5432, Valid: true},
-						MaxAccessDuration: sql.Null[time.Duration]{V: 30 * time.Minute, Valid: true},
-					},
+			expServices: []*models.Service{
+				{
+					ID:                2,
+					CreatedAt:         timeNow,
+					UpdatedAt:         timeNow,
+					Name:              "db",
+					Port:              uint16(5432),
+					MaxAccessDuration: 30 * time.Minute,
 				},
 			},
-			expErr: "service doesn't exist",
+			expErr: "service with name 'web' doesn't exist",
 		},
 		{
-			name:      "ok/remove_2",
-			args:      []string{"remove", "db"},
-			expConfig: config.Config{Services: map[string]svc.Service{}},
+			name:        "ok/remove_2",
+			args:        []string{"remove", "db"},
+			expServices: []*models.Service{},
 		},
 		{
-			name:      "ok/list_empty",
-			args:      []string{"list"},
-			expConfig: config.Config{Services: map[string]svc.Service{}},
+			name:        "ok/list_empty",
+			args:        []string{"list"},
+			expServices: []*models.Service{},
 		},
 	}
 
@@ -299,6 +308,9 @@ func TestAppService(t *testing.T) {
 	defer cancel()
 
 	app, err := newTestApp(tctx)
+	h(assert.NoError(t, err))
+
+	err = initTestDB(app.ctx, nil)
 	h(assert.NoError(t, err))
 
 	for _, tt := range tests {
@@ -309,6 +321,11 @@ func TestAppService(t *testing.T) {
 			stdout := app.stdout.String()
 			stderr := app.stderr.String()
 
+			var serr *aerrors.StructuredError
+			if errors.As(err, &serr) {
+				err = serr.Cause()
+			}
+
 			if tt.expErr != "" {
 				h(assert.ErrorContains(t, err, tt.expErr))
 			} else {
@@ -318,12 +335,9 @@ func TestAppService(t *testing.T) {
 			h(assert.Equal(t, tt.expStdout, stdout))
 			h(assert.Equal(t, tt.expStderr, stderr))
 
-			cfgJSON, err := vfs.ReadFile(app.ctx.FS, "/config.json")
+			services, err := models.Services(app.ctx.DB.NewContext(), app.ctx.DB, nil)
 			h(assert.NoError(t, err))
-			var cfg config.Config
-			err = json.Unmarshal(cfgJSON, &cfg)
-			h(assert.NoError(t, err))
-			h(assert.Equal(t, tt.expConfig, cfg))
+			h(assert.Equal(t, tt.expServices, services))
 		})
 	}
 }
