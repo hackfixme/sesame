@@ -5,6 +5,7 @@ go 1.24.2
 require (
 	github.com/adrg/xdg v0.5.3
 	github.com/alecthomas/kong v1.10.0
+	github.com/felixge/httpsnoop v1.0.5-0.20250604085516-9a9390b3efa8
 	github.com/glebarez/go-sqlite v1.22.0
 	github.com/google/nftables v0.3.0
 	github.com/lmittmann/tint v1.0.7

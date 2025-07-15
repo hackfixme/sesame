@@ -12,6 +12,7 @@ import (
 	actx "go.hackfix.me/sesame/app/context"
 	"go.hackfix.me/sesame/crypto"
 	"go.hackfix.me/sesame/web/server/api/v1"
+	"go.hackfix.me/sesame/web/server/middleware"
 )
 
 // Server is a wrapper around http.Server with some custom behavior.
@@ -42,7 +43,7 @@ func New(appCtx *actx.Context, addr string, tlsCert *tls.Certificate) (*Server, 
 	logger := appCtx.Logger.With("component", "web-server")
 	srv := &Server{
 		Server: &http.Server{
-			Handler:           SetupHandlers(appCtx),
+			Handler:           SetupHandlers(appCtx, logger),
 			Addr:              addr,
 			ReadHeaderTimeout: 10 * time.Second,
 			ReadTimeout:       30 * time.Second,
@@ -79,8 +80,11 @@ func (s *Server) ListenAndServe() error {
 }
 
 // SetupHandlers configures the server HTTP handlers.
-func SetupHandlers(appCtx *actx.Context) http.Handler {
+func SetupHandlers(appCtx *actx.Context, logger *slog.Logger) http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle("/api/v1/", http.StripPrefix("/api/v1", api.SetupHandlers(appCtx)))
-	return mux
+
+	mux.Handle("/api/v1/", http.StripPrefix("/api/v1", api.SetupHandlers(appCtx, logger)))
+
+	logMux := middleware.Logger(logger)(mux)
+	return logMux
 }
