@@ -58,7 +58,7 @@ func TestAppOpen(t *testing.T) {
 			clients:        []string{"192.168.1.1", "10.0.0.0/8", "172.16.1.1-172.16.1.100", "2001:db8::/32"},
 			accessDuration: 30 * time.Minute,
 			expStderr: []string{
-				"created temporary access", "service_name=web",
+				"granted access", "service_name=web",
 				"service_port=80", "duration=30m0s",
 				"client_ip_range=192.168.1.1-192.168.1.1",
 				"client_ip_range=10.0.0.0-10.255.255.255",
@@ -253,7 +253,7 @@ func TestAppService(t *testing.T) {
 					},
 				},
 			},
-			expErr: "service 'db' already exists",
+			expErr: "service already exists",
 		},
 		{
 			name: "err/remove_service_doesnot_exist",
@@ -267,7 +267,7 @@ func TestAppService(t *testing.T) {
 					},
 				},
 			},
-			expErr: "service 'web' doesn't exist",
+			expErr: "service doesn't exist",
 		},
 		{
 			name: "err/update_service_doesnot_exist",
@@ -281,7 +281,7 @@ func TestAppService(t *testing.T) {
 					},
 				},
 			},
-			expErr: "service 'web' doesn't exist",
+			expErr: "service doesn't exist",
 		},
 		{
 			name:      "ok/remove_2",

@@ -19,6 +19,8 @@ import (
 func TestNewManager(t *testing.T) {
 	t.Parallel()
 
+	logger := slog.New(slog.DiscardHandler)
+
 	tests := []struct {
 		name     string
 		firewall types.Firewall
@@ -26,7 +28,7 @@ func TestNewManager(t *testing.T) {
 	}{
 		{
 			name:     "ok/valid",
-			firewall: mock.New(time.Now),
+			firewall: mock.New(time.Now, logger),
 		},
 		{
 			name:     "err/nil_firewall",
@@ -56,9 +58,9 @@ func TestNewManager(t *testing.T) {
 	t.Run("ok/custom_logger", func(t *testing.T) {
 		t.Parallel()
 
-		mockFirewall := mock.New(time.Now)
-		services := make(map[string]svc.Service)
 		logger := slog.New(slog.DiscardHandler)
+		mockFirewall := mock.New(time.Now, logger)
+		services := make(map[string]svc.Service)
 		manager, err := firewall.NewManager(mockFirewall, services, firewall.WithLogger(logger))
 		require.NoError(t, err)
 		assert.NotNil(t, manager)
@@ -138,7 +140,8 @@ func TestManager_AllowAccess(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockFirewall := mock.New(timeNowFn)
+			logger := slog.New(slog.DiscardHandler)
+			mockFirewall := mock.New(timeNowFn, logger)
 
 			// For the firewall allow failure test, we need to create the manager first
 			// (without error) then set the error for the Allow operation.
