@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-chi/httplog/v3"
+
 	actx "go.hackfix.me/sesame/app/context"
 	"go.hackfix.me/sesame/crypto"
 	"go.hackfix.me/sesame/web/server/api/v1"
@@ -85,6 +87,20 @@ func SetupHandlers(appCtx *actx.Context, logger *slog.Logger) http.Handler {
 
 	mux.Handle("/api/v1/", http.StripPrefix("/api/v1", api.SetupHandlers(appCtx, logger)))
 
-	logMux := middleware.Logger(logger)(mux)
+	logBody := func(_ *http.Request) bool {
+		return appCtx.LogLevel == slog.LevelDebug
+	}
+	var loggerMW middleware.Middleware = httplog.RequestLogger(logger, &httplog.Options{
+		Level:              appCtx.LogLevel,
+		Schema:             httplog.SchemaECS,
+		RecoverPanics:      true,
+		LogRequestHeaders:  []string{"Origin"},
+		LogResponseHeaders: []string{},
+		LogRequestBody:     logBody,
+		LogResponseBody:    logBody,
+	})
+
+	logMux := middleware.Chain(loggerMW, mux)
+
 	return logMux
 }

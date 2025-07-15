@@ -5,8 +5,8 @@ go 1.24.2
 require (
 	github.com/adrg/xdg v0.5.3
 	github.com/alecthomas/kong v1.10.0
-	github.com/felixge/httpsnoop v1.0.5-0.20250604085516-9a9390b3efa8
 	github.com/glebarez/go-sqlite v1.22.0
+	github.com/go-chi/httplog/v3 v3.2.2
 	github.com/google/nftables v0.3.0
 	github.com/lmittmann/tint v1.0.7
 	github.com/mandelsoft/vfs v0.4.4
@@ -26,6 +26,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fatih/color v1.15.0 // indirect
+	github.com/go-chi/chi/v5 v5.1.0 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/uuid v1.5.0 // indirect
 	github.com/mandelsoft/filepath v0.0.0-20240223090642-3e2777258aa3 // indirect
