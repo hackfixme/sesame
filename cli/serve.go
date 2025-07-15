@@ -10,42 +10,17 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/mandelsoft/vfs/pkg/vfs"
-
 	actx "go.hackfix.me/sesame/app/context"
-	aerrors "go.hackfix.me/sesame/app/errors"
 	"go.hackfix.me/sesame/web/server"
 )
 
 // Serve starts the web server.
 type Serve struct {
-	Address     string `help:"[host]:port to listen on"`
-	TLSCertFile string `help:"Path to a TLS certificate file"`
-	TLSKeyFile  string `help:"Path to a TLS private key file"`
+	Address string `arg:"" help:"[host]:port to listen on"`
 }
 
 // Run the serve command.
 func (c *Serve) Run(appCtx *actx.Context) error {
-	var tlsCert []byte
-	if c.TLSCertFile != "" {
-		var err error
-		tlsCert, err = vfs.ReadFile(appCtx.FS, c.TLSCertFile)
-		if err != nil {
-			return aerrors.NewWithCause(
-				"failed reading TLS certificate file", err, "path", c.TLSCertFile)
-		}
-	}
-
-	var tlsKey []byte
-	if c.TLSKeyFile != "" {
-		var err error
-		tlsKey, err = vfs.ReadFile(appCtx.FS, c.TLSKeyFile)
-		if err != nil {
-			return aerrors.NewWithCause(
-				"failed reading TLS private key file", err, "path", c.TLSKeyFile)
-		}
-	}
-
 	tlsCert, err := appCtx.ServerTLSCert()
 	if err != nil {
 		return err

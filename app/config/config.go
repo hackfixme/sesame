@@ -77,9 +77,7 @@ func (c *Config) Save() error {
 
 // Server holds server-specific configuration options.
 type Server struct {
-	Address     sql.Null[string] `json:"address"`
-	TLSCertFile sql.Null[string] `json:"tls_cert_file"`
-	TLSKeyFile  sql.Null[string] `json:"tls_key_file"`
+	Address sql.Null[string] `json:"address"`
 }
 
 // Firewall holds firewall-specific configuration options.
@@ -98,9 +96,7 @@ type fwCfgWrapper struct {
 	DefaultAccessDuration string `json:"default_access_duration,omitempty"`
 }
 type srvCfgWrapper struct {
-	Address     string `json:"address,omitempty"`
-	TLSCertFile string `json:"tls_cert_file,omitempty"`
-	TLSKeyFile  string `json:"tls_key_file,omitempty"`
+	Address string `json:"address,omitempty"`
 }
 type svcWrapper struct {
 	Port              uint16 `json:"port"`
@@ -123,12 +119,6 @@ func (c Config) MarshalJSON() ([]byte, error) {
 
 	if c.Server.Address.Valid {
 		w.Server.Address = c.Server.Address.V
-	}
-	if c.Server.TLSCertFile.Valid {
-		w.Server.TLSCertFile = c.Server.TLSCertFile.V
-	}
-	if c.Server.TLSKeyFile.Valid {
-		w.Server.TLSKeyFile = c.Server.TLSKeyFile.V
 	}
 
 	for name, svc := range c.Services {
@@ -168,12 +158,6 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 
 	if w.Server.Address != "" {
 		c.Server.Address = sql.Null[string]{V: w.Server.Address, Valid: true}
-	}
-	if w.Server.TLSCertFile != "" {
-		c.Server.TLSCertFile = sql.Null[string]{V: w.Server.TLSCertFile, Valid: true}
-	}
-	if w.Server.TLSKeyFile != "" {
-		c.Server.TLSKeyFile = sql.Null[string]{V: w.Server.TLSKeyFile, Valid: true}
 	}
 
 	c.Services = make(map[string]svc.Service)

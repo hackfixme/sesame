@@ -117,10 +117,4 @@ func (c *CLI) ApplyConfig(cfg *config.Config) {
 	if c.Serve.Address == "" && cfg.Server.Address.Valid {
 		c.Serve.Address = cfg.Server.Address.V
 	}
-	if c.Serve.TLSCertFile == "" && cfg.Server.TLSCertFile.Valid {
-		c.Serve.TLSCertFile = cfg.Server.TLSCertFile.V
-	}
-	if c.Serve.TLSKeyFile == "" && cfg.Server.TLSKeyFile.Valid {
-		c.Serve.TLSKeyFile = cfg.Server.TLSKeyFile.V
-	}
 }
