@@ -81,6 +81,7 @@ func (app *App) Run(args []string) error {
 	if app.logLevel != nil {
 		app.logLevel.Set(app.cli.Log.Level)
 		slog.SetLogLoggerLevel(app.cli.Log.Level)
+		app.ctx.LogLevel = app.logLevel.Level()
 	}
 
 	if app.ctx.Config == nil || app.ctx.Config.Path() != app.cli.ConfigFile {

@@ -20,13 +20,14 @@ import (
 // the application to avoid direct dependencies on external systems, and make
 // testing easier.
 type Context struct {
-	Ctx     context.Context // global context
-	FS      vfs.FileSystem  // filesystem
-	Env     Environment     // process environment
-	Logger  *slog.Logger    // global logger
-	TimeNow func() time.Time
-	Config  *cfg.Config   // values read from the configuration file
-	UUIDGen func() string // UUID generator
+	Ctx      context.Context  // global context
+	FS       vfs.FileSystem   // filesystem
+	Env      Environment      // process environment
+	Logger   *slog.Logger     // global logger
+	LogLevel slog.Level       // the configured log level
+	TimeNow  func() time.Time // function to retrieve the current system time
+	Config   *cfg.Config      // values read from the configuration file
+	UUIDGen  func() string    // UUID generator
 
 	// Standard streams
 	Stdin  io.Reader
