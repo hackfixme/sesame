@@ -138,7 +138,10 @@ func (r *Remote) ClientTLSConfig() (*tls.Config, error) {
 	tlsConfig.RootCAs = caCertPool
 
 	tlsConfig.Certificates = []tls.Certificate{*r.TLSClientCert}
-	tlsConfig.ServerName = r.TLSCACert.Subject.CommonName
+	if len(r.TLSCACert.DNSNames) == 0 {
+		return nil, fmt.Errorf("no Subject Alternative Name values found in server CA certificate")
+	}
+	tlsConfig.ServerName = r.TLSCACert.DNSNames[0]
 
 	return tlsConfig, nil
 }

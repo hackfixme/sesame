@@ -93,10 +93,21 @@ func (h *Handler) JoinPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	serverTLSCACert, err := crypto.ExtractCACert(serverTLSCert)
+	if err != nil {
+		_ = util.WriteJSON(w, types.NewInternalError(err.Error()))
+		return
+	}
+
+	if len(serverTLSCACert.DNSNames) == 0 {
+		_ = util.WriteJSON(w, types.NewInternalError("no Subject Alternative Name values found in server CA certificate"))
+		return
+	}
+
 	// 6. The client is authenticated, so create the TLS client certificate,
 	// signed by the server certificate.
 	clientTLSCert, err := crypto.NewTLSCert(
-		inv.User.Name, []string{serverTLSCert.Leaf.Subject.CommonName}, time.Now().Add(24*time.Hour), &serverTLSCert,
+		inv.User.Name, []string{serverTLSCACert.DNSNames[0]}, time.Now().Add(24*time.Hour), &serverTLSCert,
 	)
 	if err != nil {
 		_ = util.WriteJSON(w, types.NewInternalError(err.Error()))
@@ -104,12 +115,6 @@ func (h *Handler) JoinPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 7. Assemble the response payload, and serialize it to JSON.
-	serverTLSCACert, err := crypto.ExtractCACert(serverTLSCert)
-	if err != nil {
-		_ = util.WriteJSON(w, types.NewInternalError(err.Error()))
-		return
-	}
-
 	clientTLSCertPEM, err := crypto.SerializeTLSCert(clientTLSCert)
 	if err != nil {
 		_ = util.WriteJSON(w, types.NewInternalError(err.Error()))
