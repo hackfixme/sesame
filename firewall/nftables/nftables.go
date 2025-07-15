@@ -49,7 +49,7 @@ func New(defaultAccessDuration time.Duration, logger *slog.Logger) (*NFTables, e
 		conn:                  conn,
 		allowed:               make(map[int]*gnft.Set),
 		defaultAccessDuration: defaultAccessDuration,
-		logger:                logger.With("type", "nftables"),
+		logger:                logger.With("firewall_type", "nftables"),
 	}
 
 	// Try getting the existing table and named sets if they exist. Otherwise
@@ -414,7 +414,7 @@ func (n *NFTables) Allow(ipRange netipx.IPRange, destPort uint16, duration time.
 		return fmt.Errorf("failed flushing rules: %w", err)
 	}
 
-	n.logger.Debug("allowed access",
+	n.logger.Debug("granted access",
 		"range", ipRange.String(),
 		"port", destPort,
 		"duration", duration)

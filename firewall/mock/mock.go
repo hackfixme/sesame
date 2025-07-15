@@ -1,6 +1,7 @@
 package mock
 
 import (
+	"log/slog"
 	"time"
 
 	"go4.org/netipx"
@@ -15,16 +16,18 @@ type Mock struct {
 	Allowed map[string]map[uint16]time.Time
 	failErr error // to simulate errors
 	timeNow func() time.Time
+	logger  *slog.Logger
 }
 
 var _ ftypes.Firewall = (*Mock)(nil)
 
 // New creates a new Mock firewall instance with the provided time function.
 // The timeNow function is used to determine current time for expiration calculations.
-func New(timeNow func() time.Time) *Mock {
+func New(timeNow func() time.Time, logger *slog.Logger) *Mock {
 	return &Mock{
 		Allowed: make(map[string]map[uint16]time.Time),
 		timeNow: timeNow,
+		logger:  logger,
 	}
 }
 
@@ -48,6 +51,12 @@ func (m *Mock) Allow(ipRange netipx.IPRange, destPort uint16, duration time.Dura
 		m.Allowed[ipStr] = ports
 	}
 	ports[destPort] = m.timeNow().Add(duration)
+
+	m.logger.Debug("granted access",
+		"range", ipRange.String(),
+		"port", destPort,
+		"duration", duration)
+
 	return nil
 }
 

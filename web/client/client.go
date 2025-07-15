@@ -29,6 +29,6 @@ func New(address string, tlsConfig *tls.Config, logger *slog.Logger) *Client {
 			},
 		},
 		address: address,
-		logger:  logger.With("component", "client"),
+		logger:  logger.With("component", "web-client"),
 	}
 }

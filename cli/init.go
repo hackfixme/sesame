@@ -35,7 +35,7 @@ func (c *Init) Run(appCtx *actx.Context) error {
 		if appCtx.Config.Firewall.Type.Valid {
 			appCtx.Logger.Warn("A firewall is already initialized, skipping", "type", appCtx.Config.Firewall.Type.V)
 		} else {
-			fw, _, err := firewall.Setup(appCtx, c.FirewallType, c.FirewallDefaultAccessDuration)
+			fw, _, err := firewall.Setup(appCtx, c.FirewallType, c.FirewallDefaultAccessDuration, appCtx.Logger)
 			if err != nil {
 				return err
 			}

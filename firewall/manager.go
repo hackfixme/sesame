@@ -70,13 +70,13 @@ func (m *Manager) AllowAccess(ipSet *netipx.IPSet, serviceName string, duration 
 	logger = logger.With("duration", duration)
 
 	for _, ipRange := range ipSet.Ranges() {
-		logger.With("client_ip_range", ipRange.String()).Debug("creating temporary access")
+		logger.With("client_ip_range", ipRange.String()).Debug("granting access")
 
 		if err := m.firewall.Allow(ipRange, svc.Port.V, duration); err != nil {
 			return fmt.Errorf("failed creating access for client IP range '%s' to service %s: %w", ipRange, serviceName, err)
 		}
 
-		logger.With("client_ip_range", ipRange.String()).Info("created temporary access")
+		logger.With("client_ip_range", ipRange.String()).Info("granted access")
 	}
 
 	return nil
@@ -88,6 +88,7 @@ func (m *Manager) AllowAccess(ipSet *netipx.IPSet, serviceName string, duration 
 //nolint:ireturn // Intentional, this is a generic function.
 func Setup(
 	appCtx *actx.Context, ft ftypes.FirewallType, defaultAccessDuration time.Duration,
+	logger *slog.Logger,
 ) (ftypes.Firewall, *Manager, error) {
 	var (
 		fw  ftypes.Firewall
@@ -95,9 +96,9 @@ func Setup(
 	)
 	switch ft {
 	case ftypes.FirewallMock:
-		fw = mock.New(appCtx.TimeNow)
+		fw = mock.New(appCtx.TimeNow, logger)
 	case ftypes.FirewallNFTables:
-		fw, err = nftables.New(defaultAccessDuration, appCtx.Logger)
+		fw, err = nftables.New(defaultAccessDuration, logger)
 	default:
 		return nil, nil, fmt.Errorf("unsupported firewall type '%s'", ft)
 	}
@@ -108,7 +109,7 @@ func Setup(
 	var fwMgr *Manager
 	fwMgr, err = NewManager(
 		fw, appCtx.Config.Services,
-		WithLogger(appCtx.Logger),
+		WithLogger(logger),
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed creating the firewall manager: %w", err)
