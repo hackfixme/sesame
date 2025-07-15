@@ -19,7 +19,7 @@ import (
 //
 // If this fails, a response with status 401 Unauthorized is returned. Otherwise
 // the request is allowed to proceed.
-func Authn(appCtx *actx.Context, logger *slog.Logger) Middleware {
+func Authn(appCtx *actx.Context, logger *slog.Logger) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.TLS == nil || len(r.TLS.VerifiedChains) == 0 || len(r.TLS.VerifiedChains[0]) == 0 {

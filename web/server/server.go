@@ -9,12 +9,12 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/httplog/v3"
 
 	actx "go.hackfix.me/sesame/app/context"
 	"go.hackfix.me/sesame/crypto"
 	"go.hackfix.me/sesame/web/server/api/v1"
-	"go.hackfix.me/sesame/web/server/middleware"
 )
 
 // Server is a wrapper around http.Server with some custom behavior.
@@ -90,17 +90,16 @@ func SetupHandlers(appCtx *actx.Context, logger *slog.Logger) http.Handler {
 	logBody := func(_ *http.Request) bool {
 		return appCtx.LogLevel == slog.LevelDebug
 	}
-	var loggerMW middleware.Middleware = httplog.RequestLogger(logger, &httplog.Options{
+	loggerMW := httplog.RequestLogger(logger, &httplog.Options{
 		Level:              appCtx.LogLevel,
 		Schema:             httplog.SchemaECS,
 		RecoverPanics:      true,
-		LogRequestHeaders:  []string{"Origin"},
-		LogResponseHeaders: []string{},
+		LogResponseHeaders: []string{"Content-Type"},
 		LogRequestBody:     logBody,
 		LogResponseBody:    logBody,
 	})
 
-	logMux := middleware.Chain(loggerMW, mux)
+	handler := chi.Chain(loggerMW).Handler(mux)
 
-	return logMux
+	return handler
 }

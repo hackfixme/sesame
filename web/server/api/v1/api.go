@@ -4,6 +4,8 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+
 	actx "go.hackfix.me/sesame/app/context"
 	"go.hackfix.me/sesame/web/server/middleware"
 )
@@ -18,10 +20,10 @@ type Handler struct {
 func SetupHandlers(appCtx *actx.Context, logger *slog.Logger) http.Handler {
 	h := Handler{appCtx: appCtx, logger: logger}
 	mux := http.NewServeMux()
-	authn := middleware.Authn(appCtx, logger)
+	mwChain := chi.Chain(middleware.Authn(appCtx, logger))
 
 	mux.HandleFunc("POST /join", h.JoinPost)
-	mux.Handle("POST /open", middleware.Chain(authn, http.HandlerFunc(h.OpenPost)))
+	mux.Handle("POST /open", mwChain.HandlerFunc(h.OpenPost))
 
 	return mux
 }
