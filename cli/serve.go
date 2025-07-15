@@ -46,7 +46,12 @@ func (c *Serve) Run(appCtx *actx.Context) error {
 		}
 	}
 
-	srv, err := server.New(appCtx, c.Address, tlsCert, tlsKey)
+	tlsCert, err := appCtx.ServerTLSCert()
+	if err != nil {
+		return err
+	}
+
+	srv, err := server.New(appCtx, c.Address, &tlsCert)
 	if err != nil {
 		return err
 	}

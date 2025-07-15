@@ -2,34 +2,44 @@ package server
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"time"
 
 	actx "go.hackfix.me/sesame/app/context"
+	"go.hackfix.me/sesame/crypto"
 	"go.hackfix.me/sesame/web/server/api/v1"
 )
 
 // Server is a wrapper around http.Server with some custom behavior.
 type Server struct {
 	*http.Server
-	appCtx *actx.Context
+	logger *slog.Logger
 }
 
 // New returns a new web Server instance that will listen on addr. If tlsCert
 // and tlsPrivKey are provided, ListenAndServe will start an HTTPS server.
-func New(appCtx *actx.Context, addr string, tlsCert, tlsPrivKey []byte) (*Server, error) {
+func New(appCtx *actx.Context, addr string, tlsCert *tls.Certificate) (*Server, error) {
 	var tlsCfg *tls.Config
-	if tlsCert != nil && tlsPrivKey != nil {
-		tlsCfg = defaultTLSConfig()
-		certPair, err := tls.X509KeyPair(tlsCert, tlsPrivKey)
+	if tlsCert != nil {
+		tlsCfg = crypto.DefaultTLSConfig()
+
+		tlsCfg.Certificates = []tls.Certificate{*tlsCert}
+		tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
+
+		caCert, err := crypto.ExtractCACert(*tlsCert)
 		if err != nil {
-			return nil, fmt.Errorf("failed parsing PEM encoded TLS certificate: %w", err)
+			return nil, fmt.Errorf("failed extracting CA certificate: %w", err)
 		}
-		tlsCfg.Certificates = []tls.Certificate{certPair}
+		caCertPool := x509.NewCertPool()
+		caCertPool.AddCert(caCert)
+		tlsCfg.ClientCAs = caCertPool
 	}
 
+	logger := appCtx.Logger.With("component", "web-server")
 	srv := &Server{
 		Server: &http.Server{
 			Handler:           SetupHandlers(appCtx),
@@ -39,7 +49,7 @@ func New(appCtx *actx.Context, addr string, tlsCert, tlsPrivKey []byte) (*Server
 			WriteTimeout:      10 * time.Minute,
 			TLSConfig:         tlsCfg,
 		},
-		appCtx: appCtx,
+		logger: logger,
 	}
 
 	return srv, nil
@@ -49,43 +59,23 @@ func New(appCtx *actx.Context, addr string, tlsCert, tlsPrivKey []byte) (*Server
 // listen address, which is convenient when the address is dynamically
 // determined by the system (e.g. ':0').
 func (s *Server) ListenAndServe() error {
-	var (
-		ln      net.Listener
-		err     error
-		srvType string
-	)
-	if s.TLSConfig != nil {
-		ln, err = tls.Listen("tcp", s.Addr, s.TLSConfig)
-		srvType = "HTTPS"
-	} else {
-		ln, err = net.Listen("tcp", s.Addr)
-		srvType = "HTTP"
-	}
+	ln, err := net.Listen("tcp", s.Addr)
 	if err != nil {
 		//nolint:wrapcheck // This is fine.
 		return err
 	}
 
 	s.Addr = ln.Addr().String()
-	s.appCtx.Logger.Info(fmt.Sprintf("started %s server", srvType), "address", s.Addr)
+	s.logger.Info("started listener", "address", s.Addr)
+
+	hl := &HybridListener{
+		Listener:  ln,
+		tlsConfig: s.Server.TLSConfig,
+		logger:    s.logger,
+	}
 
 	//nolint:wrapcheck // This is fine.
-	return s.Serve(ln)
-}
-
-func defaultTLSConfig() *tls.Config {
-	return &tls.Config{
-		// Avoids most of the memorably-named TLS attacks
-		MinVersion: tls.VersionTLS13,
-		// Causes servers to use Go's default ciphersuite preferences,
-		// which are tuned to avoid attacks. Does nothing on clients.
-		PreferServerCipherSuites: true,
-		// Only use curves which have constant-time implementations
-		CurvePreferences: []tls.CurveID{
-			tls.CurveP256,
-			tls.CurveID(tls.Ed25519),
-		},
-	}
+	return s.Serve(hl)
 }
 
 // SetupHandlers configures the server HTTP handlers.
