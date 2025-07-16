@@ -36,6 +36,8 @@ test *args:
   set -eEuo pipefail
 
   cov=0
+  unit=0
+  integ=0
   pkgs=()
   argsa=(-v -race -count=1 -failfast)
   argsb=()
@@ -44,7 +46,9 @@ test *args:
   # parsing arguments. See https://github.com/casey/just/issues/476
   while [ "$#" -gt 0 ]; do
     case $1 in
-      -c|--coverage)  cov=1 ;;
+      -c|--coverage)     cov=1 ;;
+      -u|--unit)         unit=1 ;;
+      -i|--integration)  integ=1 ;;
       # Other options are passed through to go test
       -*)             argsa+=("$1") ;;
       *)              pkgs+=("$1") ;;
@@ -62,6 +66,13 @@ test *args:
   fi
 
   [ "${#pkgs[@]}" -eq 0 ] && pkgs=(./...)
+
+  if [ "$unit" -gt 0 ] && [ "$integ" -eq 0 ]; then
+    argsa+=(-skip "Integration$")
+  fi
+  if [ "$integ" -gt 0 ] && [ "$unit" -eq 0 ]; then
+    argsa+=(-run "Integration$")
+  fi
 
   go test "${argsa[@]}" "${pkgs[@]}" "${argsb[@]}"
 
