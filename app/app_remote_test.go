@@ -1,6 +1,7 @@
 package app
 
 import (
+	"net/http"
 	"regexp"
 	"strings"
 	"sync"
@@ -8,6 +9,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	aerrors "go.hackfix.me/sesame/app/errors"
 )
 
 // Test the scenario of 2 Sesame nodes, where one creates a user and invitation
@@ -107,4 +110,11 @@ func TestAppRemoteIntegration(t *testing.T) {
 	h(assert.Contains(t, app1fwdebug, "range=10.0.0.10-10.0.0.10"))
 	h(assert.Contains(t, app1fwdebug, "port=8080"))
 	h(assert.Contains(t, app1fwdebug, "duration=1h"))
+
+	// Confirm that the invite token has been redeemed and cannot be reused.
+	err = app2.Run("remote", "add", "testremote2", srvAddress, token)
+	h(assert.Error(t, err))
+	var serr *aerrors.StructuredError
+	h(assert.ErrorAs(t, err, &serr))
+	h(assert.Equal(t, http.StatusUnauthorized, serr.Metadata()["status_code"]))
 }

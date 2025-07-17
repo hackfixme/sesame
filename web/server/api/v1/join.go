@@ -141,7 +141,14 @@ func (h *Handler) JoinPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 9. Write the response.
+	// 9. Mark the invite as redeemed so that it can't be used again.
+	err = inv.Redeem(h.appCtx.DB.NewContext(), h.appCtx.DB, h.appCtx.TimeNow().UTC())
+	if err != nil {
+		_ = util.WriteJSON(w, types.NewInternalError(err.Error()))
+		return
+	}
+
+	// 10. Write the response.
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.WriteString(w, base58.Encode(dataEnc))
 }

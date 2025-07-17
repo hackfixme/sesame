@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdh"
 	"crypto/rand"
+	"database/sql"
 	"errors"
 	"fmt"
 	"slices"
@@ -17,13 +18,14 @@ import (
 )
 
 type Invite struct {
-	ID        uint64
-	UUID      string
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	ExpiresAt time.Time
-	User      *User
-	Nonce     []byte
+	ID         uint64
+	UUID       string
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	ExpiresAt  time.Time
+	RedeemedAt sql.Null[time.Time]
+	User       *User
+	Nonce      []byte
 
 	privKey *ecdh.PrivateKey
 }
@@ -72,11 +74,17 @@ func (inv *Invite) Save(ctx context.Context, d types.Querier, update bool) error
 		if err != nil {
 			return fmt.Errorf("failed creating query filter: %w", err)
 		}
+		args = []any{timeNow, inv.ExpiresAt}
+		var redeemed string
+		if inv.IsRedeemed() {
+			redeemed = ", redeemed_at = ?"
+			args = append(args, inv.RedeemedAt.V)
+		}
+		args = append(args, filter.Args...)
 		stmt = fmt.Sprintf(`UPDATE invites
 			SET updated_at = ?,
-				expires_at = ?
-			WHERE %s`, filter.Where)
-		args = append([]any{timeNow, inv.ExpiresAt}, filter.Args...)
+				expires_at = ?%s
+			WHERE %s`, redeemed, filter.Where)
 		op = fmt.Sprintf("updating invite with %s", filterStr)
 	} else {
 		stmt = `INSERT INTO invites (
@@ -112,11 +120,19 @@ func (inv *Invite) Save(ctx context.Context, d types.Querier, update bool) error
 }
 
 // Load the invite record from the database. The invite ID, UUID or token must
-// be set for the lookup.
+// be set for the lookup. For filtering by RedeemedAt: Valid=false filters for
+// NULL, Valid=true with zero time means no filter, and Valid=true with non-zero
+// time filters for exact match.
 func (inv *Invite) Load(ctx context.Context, d types.Querier) error {
 	filter, filterStr, err := inv.createFilter(ctx, d, 1)
 	if err != nil {
 		return fmt.Errorf("failed creating query filter: %w", err)
+	}
+
+	if !inv.RedeemedAt.Valid {
+		filter = filter.And(types.NewFilter("redeemed_at IS NULL", nil))
+	} else if !inv.RedeemedAt.V.IsZero() {
+		filter = filter.And(types.NewFilter("redeemed_at = ?", []any{inv.RedeemedAt.V}))
 	}
 
 	invites, err := Invites(ctx, d, filter)
@@ -156,6 +172,26 @@ func (inv *Invite) Delete(ctx context.Context, d types.Querier) error {
 	}
 
 	return nil
+}
+
+// Redeem stores the time this invite was redeemed at. An invite must not be
+// redeemed more than once.
+func (inv *Invite) Redeem(ctx context.Context, d types.Querier, t time.Time) error {
+	if inv.IsRedeemed() {
+		return errors.New("invite is already redeemed")
+	}
+
+	inv.RedeemedAt = sql.Null[time.Time]{V: t, Valid: true}
+	if err := inv.Save(ctx, d, true); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// IsRedeemed returns whether this invite has been redeemed.
+func (inv *Invite) IsRedeemed() bool {
+	return inv.RedeemedAt.Valid && !inv.RedeemedAt.V.IsZero()
 }
 
 // Token generates the invite token by concatenating the nonce with the
@@ -209,7 +245,9 @@ func (inv *Invite) createFilter(ctx context.Context, d types.Querier, limit int)
 // Invites returns one or more invites from the database. An optional filter can
 // be passed to limit the results.
 func Invites(ctx context.Context, d types.Querier, filter *types.Filter) ([]*Invite, error) {
-	queryFmt := `SELECT inv.id, inv.uuid, inv.created_at, inv.updated_at, inv.expires_at, inv.user_id, inv.private_key, inv.nonce
+	queryFmt := `SELECT
+			inv.id, inv.uuid, inv.created_at, inv.updated_at, inv.expires_at, inv.redeemed_at,
+			inv.user_id, inv.private_key, inv.nonce
 		FROM invites inv
 		%s ORDER BY inv.expires_at ASC %s`
 
@@ -235,11 +273,13 @@ func Invites(ctx context.Context, d types.Querier, filter *types.Filter) ([]*Inv
 	users := map[uint64]*User{}
 	for rows.Next() {
 		var (
-			inv          = Invite{}
+			inv          = &Invite{}
 			userID       uint64
 			privKeyBytes []byte
 		)
-		err := rows.Scan(&inv.ID, &inv.UUID, &inv.CreatedAt, &inv.UpdatedAt, &inv.ExpiresAt, &userID, &privKeyBytes, &inv.Nonce)
+		err := rows.Scan(
+			&inv.ID, &inv.UUID, &inv.CreatedAt, &inv.UpdatedAt, &inv.ExpiresAt, &inv.RedeemedAt,
+			&userID, &privKeyBytes, &inv.Nonce)
 		if err != nil {
 			return nil, types.ScanError{ModelName: "invite", Err: err}
 		}
@@ -261,7 +301,7 @@ func Invites(ctx context.Context, d types.Querier, filter *types.Filter) ([]*Inv
 		}
 		inv.privKey = privKey
 
-		invites = append(invites, &inv)
+		invites = append(invites, inv)
 	}
 
 	return invites, nil
