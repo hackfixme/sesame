@@ -17,7 +17,8 @@ import (
 // The Invite command manages invitations for remote users.
 type Invite struct {
 	User struct {
-		Name       string    `arg:"" help:"The name of the user to invite."`
+		Name string `arg:"" help:"The name of the user to invite."`
+		//nolint:lll // Long struct tags are unavoidable.
 		Expiration time.Time `default:"1h" short:"e" type:"expiration" help:"Invite expiration as a time duration from now (e.g. 5m, 1h, 3d, 1w) or a future timestamp in RFC 3339 format (e.g. %s)."`
 	} `cmd:"" help:"Create a new invitation token for an existing user to access this Sesame node remotely."`
 	List struct {
@@ -27,12 +28,15 @@ type Invite struct {
 		ID []string `arg:"" help:"Unique invite IDs. A short prefix can be specified as long as it is unique."`
 	} `cmd:"" aliases:"rm" help:"Delete one or more invites."`
 	Update struct {
-		ID         string    `arg:"" help:"Unique invite ID. A short prefix can be specified as long as it is unique."`
+		ID string `arg:"" help:"Unique invite ID. A short prefix can be specified as long as it is unique."`
+		//nolint:lll // Long struct tags are unavoidable.
 		Expiration time.Time `short:"e" type:"expiration" required:"" help:"Invite expiration as a time duration from now (e.g. 5m, 1h, 3d, 1w) or a future timestamp in RFC 3339 format (e.g. %s)."`
 	} `cmd:"" help:"Update an invite."`
 }
 
 // Run the invite command.
+//
+//nolint:gocognit,funlen // A bit over the 30 max complexity, but it's fine.
 func (c *Invite) Run(kctx *kong.Context, appCtx *actx.Context) error {
 	dbCtx := appCtx.DB.NewContext()
 
@@ -47,7 +51,7 @@ func (c *Invite) Run(kctx *kong.Context, appCtx *actx.Context) error {
 			return aerrors.NewWithCause("failed creating invite", err, "user_name", c.User.Name)
 		}
 
-		if err := inv.Save(dbCtx, appCtx.DB, false); err != nil {
+		if err = inv.Save(dbCtx, appCtx.DB, false); err != nil {
 			return aerrors.NewWithCause("failed saving invite to the database", err)
 		}
 		token, err := inv.Token()
@@ -58,9 +62,12 @@ func (c *Invite) Run(kctx *kong.Context, appCtx *actx.Context) error {
 		expFmt := fmt.Sprintf("%s (%s)",
 			inv.ExpiresAt.Local().Format(time.DateTime),
 			xtime.FormatDuration(timeLeft, time.Second))
-		fmt.Fprintf(appCtx.Stdout, `Token: %s
+		_, err = fmt.Fprintf(appCtx.Stdout, `Token: %s
 Expires At: %s
 	`, token, expFmt)
+		if err != nil {
+			return aerrors.NewWithCause("failed writing to stdout", err)
+		}
 
 	case "invite list":
 		timeNow := appCtx.TimeNow().UTC()
@@ -77,7 +84,8 @@ Expires At: %s
 		for _, inv := range invites {
 			timeLeft := inv.ExpiresAt.Sub(timeNow)
 
-			token, err := inv.Token()
+			var token string
+			token, err = inv.Token()
 			if err != nil {
 				return aerrors.NewWithCause("failed generating invitation token", err)
 			}
@@ -105,7 +113,10 @@ Expires At: %s
 
 		if len(data) > 0 {
 			header := []string{"ID", "User", "Token", "Expires At"}
-			newTable(header, data, appCtx.Stdout).Render()
+			err = renderTable(header, data, appCtx.Stdout)
+			if err != nil {
+				return aerrors.NewWithCause("failed rendering table", err)
+			}
 		}
 
 	case "invite remove <id>":

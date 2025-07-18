@@ -59,7 +59,7 @@ func (h *Handler) OpenPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	svc := &models.Service{Name: reqData.ServiceName}
-	if err := svc.Load(h.appCtx.DB.NewContext(), h.appCtx.DB); err != nil {
+	if err = svc.Load(h.appCtx.DB.NewContext(), h.appCtx.DB); err != nil {
 		_ = util.WriteJSON(w, types.NewBadRequestError(err.Error()))
 		return
 	}

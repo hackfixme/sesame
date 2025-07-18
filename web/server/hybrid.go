@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"crypto/tls"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
@@ -17,13 +18,13 @@ type PeekConn struct {
 // Read reads data from the connection using the buffered reader.
 // This ensures that any data previously peeked is properly read from the buffer.
 func (c *PeekConn) Read(b []byte) (int, error) {
-	return c.r.Read(b)
+	return c.r.Read(b) //nolint:wrapcheck // It doesn't matter, this is a low-level method.
 }
 
 // Peek returns the next n bytes without advancing the reader.
 // The bytes stop being valid at the next read call.
 func (c *PeekConn) Peek(n int) ([]byte, error) {
-	return c.r.Peek(n)
+	return c.r.Peek(n) //nolint:wrapcheck // It doesn't matter, this is a low-level method.
 }
 
 func newPeekConn(c net.Conn) *PeekConn {
@@ -47,15 +48,17 @@ type HybridListener struct {
 func (ln *HybridListener) Accept() (net.Conn, error) {
 	conn, err := ln.Listener.Accept()
 	if err != nil {
-		return nil, err
+		return nil, err //nolint:wrapcheck // It doesn't matter, this is a low-level method.
 	}
 
 	peekConn := newPeekConn(conn)
 
 	b, err := peekConn.Peek(3)
 	if err != nil {
-		peekConn.Close()
-		if err != io.EOF {
+		if cerr := peekConn.Close(); cerr != nil {
+			return nil, cerr //nolint:wrapcheck // It doesn't matter, this is a low-level method.
+		}
+		if !errors.Is(err, io.EOF) {
 			return nil, err
 		}
 	}

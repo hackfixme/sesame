@@ -1,3 +1,5 @@
+package crypto
+
 // cryptopasta - basic cryptography examples
 //
 // Written in 2016 by George Tankersley <george.tankersley@gmail.com>
@@ -8,9 +10,8 @@
 //
 // You should have received a copy of the CC0 Public Domain Dedication along
 // with this software. If not, see // <http://creativecommons.org/publicdomain/zero/1.0/>.
-
+//
 // Provides a recommended TLS configuration.
-package crypto
 
 import (
 	"bytes"
@@ -26,6 +27,7 @@ import (
 	"time"
 )
 
+// DefaultTLSConfig returns a secure default TLS configuration.
 func DefaultTLSConfig() *tls.Config {
 	return &tls.Config{
 		// Avoids most of the memorably-named TLS attacks
@@ -35,7 +37,7 @@ func DefaultTLSConfig() *tls.Config {
 		PreferServerCipherSuites: true,
 		// Only use curves which have constant-time implementations
 		CurvePreferences: []tls.CurveID{
-			tls.CurveID(tls.CurveP256),
+			tls.CurveP256,
 			tls.CurveID(tls.Ed25519),
 		},
 	}
@@ -92,7 +94,8 @@ func NewTLSCert(
 
 	var certDER []byte
 	if parent != nil {
-		parentCert, err := ExtractCACert(*parent)
+		var parentCert *x509.Certificate
+		parentCert, err = ExtractCACert(*parent)
 		if err != nil {
 			return tlsCert, fmt.Errorf("failed to extract CA certificate from parent: %w", err)
 		}
@@ -138,20 +141,20 @@ func SerializeTLSCert(cert tls.Certificate) ([]byte, error) {
 			Type:  "CERTIFICATE",
 			Bytes: certDER,
 		}); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed encoding certificate: %w", err)
 		}
 	}
 
 	keyDER, err := x509.MarshalPKCS8PrivateKey(cert.PrivateKey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed marshalling private key: %w", err)
 	}
 
-	if err := pem.Encode(&buf, &pem.Block{
+	if err = pem.Encode(&buf, &pem.Block{
 		Type:  "PRIVATE KEY",
 		Bytes: keyDER,
 	}); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed encoding private key: %w", err)
 	}
 
 	return buf.Bytes(), nil
@@ -186,7 +189,12 @@ func DeserializeTLSCert(data []byte) (tls.Certificate, error) {
 
 	certChainPEM := bytes.Join(certPEMs, nil)
 
-	return tls.X509KeyPair(certChainPEM, keyPEM)
+	cert, err := tls.X509KeyPair(certChainPEM, keyPEM)
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("failed creating X509 key pair: %w", err)
+	}
+
+	return cert, nil
 }
 
 // ExtractCACert finds and returns the first CA certificate in the certificate

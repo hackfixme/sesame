@@ -24,10 +24,12 @@ type Filter struct {
 	Limit int
 }
 
+// NewFilter creates a new query filter.
 func NewFilter(where string, args []any) *Filter {
 	return &Filter{Where: where, Args: args}
 }
 
+// And joins f2 with f1 using an AND condition.
 func (f1 *Filter) And(f2 *Filter) *Filter {
 	return &Filter{
 		Where: fmt.Sprintf("%s AND %s", f1.Where, f2.Where),
@@ -35,6 +37,7 @@ func (f1 *Filter) And(f2 *Filter) *Filter {
 	}
 }
 
+// Or joins f2 with f1 using an OR condition.
 func (f1 *Filter) Or(f2 *Filter) *Filter {
 	return &Filter{
 		Where: fmt.Sprintf("%s OR %s", f1.Where, f2.Where),

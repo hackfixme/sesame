@@ -33,7 +33,7 @@ type testApp struct {
 	flushOutputs   func() error
 }
 
-func newTestApp(ctx context.Context, options ...Option) (*testApp, error) {
+func newTestApp(ctx context.Context) (*testApp, error) {
 	// A unique name per app, to avoid clashing of in-memory SQLite DBs.
 	rndName := make([]byte, 12)
 	_, err := rand.Read(rndName)
@@ -64,7 +64,6 @@ func newTestApp(ctx context.Context, options ...Option) (*testApp, error) {
 		WithFS(memoryfs.New()),
 		WithLogger(false, false),
 	}
-	opts = append(opts, options...)
 	app, err := New("sesame", "/config.json", "/data", opts...)
 	if err != nil {
 		return nil, err
@@ -276,7 +275,7 @@ func initTestDB(appCtx *actx.Context, services []*models.Service) error {
 
 	dbCtx := appCtx.DB.NewContext()
 	for _, svc := range services {
-		if err := svc.Save(dbCtx, appCtx.DB, false); err != nil {
+		if err = svc.Save(dbCtx, appCtx.DB, false); err != nil {
 			return err
 		}
 	}

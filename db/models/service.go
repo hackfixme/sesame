@@ -9,6 +9,7 @@ import (
 	"go.hackfix.me/sesame/db/types"
 )
 
+// Service represents a system service whose access can be managed by a firewall.
 type Service struct {
 	ID                uint64
 	CreatedAt         time.Time
@@ -21,16 +22,17 @@ type Service struct {
 // Save stores the service data in the database.
 func (s *Service) Save(ctx context.Context, d types.Querier, update bool) error {
 	timeNow := d.TimeNow().UTC()
-	if update {
+	if update { //nolint:nestif // It's fine.
 		var filter *types.Filter
 		var filterStr string
-		if s.ID != 0 {
+		switch {
+		case s.ID != 0:
 			filter = &types.Filter{Where: "id = ?", Args: []any{s.ID}}
 			filterStr = fmt.Sprintf("ID %d", s.ID)
-		} else if s.Name != "" {
+		case s.Name != "":
 			filter = &types.Filter{Where: "name = ?", Args: []any{s.Name}}
 			filterStr = fmt.Sprintf("name '%s'", s.Name)
-		} else {
+		default:
 			return errors.New("must provide either a service name or ID to update")
 		}
 
@@ -47,7 +49,7 @@ func (s *Service) Save(ctx context.Context, d types.Querier, update bool) error 
 
 		n, err := res.RowsAffected()
 		if err != nil {
-			return err
+			return fmt.Errorf("failed getting affected rows: %w", err)
 		}
 		if n == 0 {
 			return types.NoResultError{ModelName: "service", ID: filterStr}
@@ -65,11 +67,10 @@ func (s *Service) Save(ctx context.Context, d types.Querier, update bool) error 
 			return types.Err("service", fmt.Sprintf("name '%s'", s.Name), err)
 		}
 
-		uID, err := res.LastInsertId()
+		s.ID, err = lastInsertID(res)
 		if err != nil {
 			return err
 		}
-		s.ID = uint64(uID)
 		s.CreatedAt = timeNow
 		s.UpdatedAt = timeNow
 	}
@@ -79,6 +80,8 @@ func (s *Service) Save(ctx context.Context, d types.Querier, update bool) error 
 
 // Load the service data from the database. Either the service ID or Name must be set
 // for the lookup.
+//
+//nolint:dupl // Similar method to Users.Load. "A little copying is better than a little dependency."
 func (s *Service) Load(ctx context.Context, d types.Querier) error {
 	if s.ID == 0 && s.Name == "" {
 		return types.InvalidInputError{Msg: "either service ID or Name must be set"}
@@ -137,8 +140,9 @@ func (s *Service) Delete(ctx context.Context, d types.Querier) error {
 		return types.Err("service", filterStr, err)
 	}
 
-	if n, err := res.RowsAffected(); err != nil {
-		return err
+	var n int64
+	if n, err = res.RowsAffected(); err != nil {
+		return fmt.Errorf("failed getting affected rows: %w", err)
 	} else if n == 0 {
 		return types.NoResultError{ModelName: "service", ID: filterStr}
 	}
@@ -148,7 +152,7 @@ func (s *Service) Delete(ctx context.Context, d types.Querier) error {
 
 // Services returns one or more services from the database. An optional filter can be
 // passed to limit the results.
-func Services(ctx context.Context, d types.Querier, filter *types.Filter) ([]*Service, error) {
+func Services(ctx context.Context, d types.Querier, filter *types.Filter) (services []*Service, rerr error) {
 	query := `SELECT
 			s.id, s.created_at, s.updated_at, s.name, s.port, s.max_access_duration
 		FROM services s %s
@@ -167,23 +171,24 @@ func Services(ctx context.Context, d types.Querier, filter *types.Filter) ([]*Se
 	if err != nil {
 		return nil, types.LoadError{ModelName: "services", Err: err}
 	}
+	defer func() {
+		if err = rows.Close(); err != nil {
+			rerr = fmt.Errorf("failed closing services rows: %w", err)
+		}
+	}()
 
-	services := []*Service{}
-	type row struct {
-		ID                uint64
-		CreatedAt         time.Time
-		UpdatedAt         time.Time
-		UserName          string
-		Port              uint16
-		MaxAccessDuration time.Duration
-	}
+	services = make([]*Service, 0)
 	for rows.Next() {
 		var s Service
-		err := rows.Scan(&s.ID, &s.CreatedAt, &s.UpdatedAt, &s.Name, &s.Port, &s.MaxAccessDuration)
+		err = rows.Scan(&s.ID, &s.CreatedAt, &s.UpdatedAt, &s.Name, &s.Port, &s.MaxAccessDuration)
 		if err != nil {
 			return nil, types.ScanError{ModelName: "service", Err: err}
 		}
 		services = append(services, &s)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed iterating over services rows: %w", err)
 	}
 
 	return services, nil

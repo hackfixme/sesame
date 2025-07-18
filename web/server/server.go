@@ -73,7 +73,7 @@ func (s *Server) ListenAndServe() error {
 
 	hl := &HybridListener{
 		Listener:  ln,
-		tlsConfig: s.Server.TLSConfig,
+		tlsConfig: s.TLSConfig,
 		logger:    s.logger,
 	}
 

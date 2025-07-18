@@ -2,6 +2,7 @@ package util
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 )
 
@@ -15,5 +16,9 @@ func WriteJSON(w http.ResponseWriter, resp any) error {
 		w.WriteHeader(r.GetStatusCode())
 	}
 
-	return json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		return fmt.Errorf("failed encoding response: %w", err)
+	}
+
+	return nil
 }

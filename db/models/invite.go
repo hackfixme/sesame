@@ -17,6 +17,8 @@ import (
 	"go.hackfix.me/sesame/db/types"
 )
 
+// Invite is a single-use claim that is created by the server for a specific
+// user that allows remote management of a Sesame node.
 type Invite struct {
 	ID         uint64
 	UUID       string
@@ -35,7 +37,7 @@ type Invite struct {
 func NewInvite(user *User, expiration time.Time, uuid string) (*Invite, error) {
 	privKey, err := ecdh.X25519().GenerateKey(rand.Reader)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed generating X25519 key: %w", err)
 	}
 
 	nonce, err := crypto.RandomData(32)
@@ -61,7 +63,7 @@ func (inv *Invite) Save(ctx context.Context, d types.Querier, update bool) error
 		stmt      string
 		filterStr string
 		op        string
-		args      = []any{}
+		args      []any
 	)
 
 	timeNow := d.TimeNow().UTC()
@@ -100,18 +102,18 @@ func (inv *Invite) Save(ctx context.Context, d types.Querier, update bool) error
 	}
 
 	if update {
-		if n, err := res.RowsAffected(); err != nil {
-			return err
+		var n int64
+		if n, err = res.RowsAffected(); err != nil {
+			return fmt.Errorf("failed getting affected rows: %w", err)
 		} else if n == 0 {
 			return types.NoResultError{ModelName: "invite", ID: filterStr}
 		}
 		inv.UpdatedAt = timeNow
 	} else {
-		invID, err := res.LastInsertId()
+		inv.ID, err = lastInsertID(res)
 		if err != nil {
 			return err
 		}
-		inv.ID = uint64(invID)
 		inv.CreatedAt = timeNow
 		inv.UpdatedAt = timeNow
 	}
@@ -165,8 +167,9 @@ func (inv *Invite) Delete(ctx context.Context, d types.Querier) error {
 		return fmt.Errorf("failed deleting invite with %s: %w", filterStr, err)
 	}
 
-	if n, err := res.RowsAffected(); err != nil {
-		return err
+	var n int64
+	if n, err = res.RowsAffected(); err != nil {
+		return fmt.Errorf("failed getting affected rows: %w", err)
 	} else if n == 0 {
 		return types.NoResultError{ModelName: "invite", ID: filterStr}
 	}
@@ -209,10 +212,11 @@ func (inv *Invite) PrivateKey() *ecdh.PrivateKey {
 func (inv *Invite) createFilter(ctx context.Context, d types.Querier, limit int) (*types.Filter, string, error) {
 	var filter *types.Filter
 	var filterStr string
-	if inv.ID != 0 {
+	switch {
+	case inv.ID != 0:
 		filter = types.NewFilter("id = ?", []any{inv.ID})
 		filterStr = fmt.Sprintf("ID %d", inv.ID)
-	} else if inv.UUID != "" {
+	case inv.UUID != "":
 		if !cuid2.IsCuid(inv.UUID) {
 			return nil, "", fmt.Errorf("invalid invite UUID: '%s'", inv.UUID)
 		}
@@ -223,11 +227,11 @@ func (inv *Invite) createFilter(ctx context.Context, d types.Querier, limit int)
 			filter = types.NewFilter("uuid = ?", []any{inv.UUID})
 			filterStr = fmt.Sprintf("UUID '%s'", inv.UUID)
 		}
-	} else if len(inv.Nonce) > 0 {
+	case len(inv.Nonce) > 0:
 		filter = types.NewFilter("nonce = ?", []any{inv.Nonce}).
 			And(types.NewFilter("expires_at > ?", []any{d.TimeNow().UTC()}))
 		filterStr = "nonce"
-	} else {
+	default:
 		return nil, "", errors.New("must provide either an invite ID, UUID or token")
 	}
 
@@ -244,7 +248,7 @@ func (inv *Invite) createFilter(ctx context.Context, d types.Querier, limit int)
 
 // Invites returns one or more invites from the database. An optional filter can
 // be passed to limit the results.
-func Invites(ctx context.Context, d types.Querier, filter *types.Filter) ([]*Invite, error) {
+func Invites(ctx context.Context, d types.Querier, filter *types.Filter) (invites []*Invite, rerr error) {
 	queryFmt := `SELECT
 			inv.id, inv.uuid, inv.created_at, inv.updated_at, inv.expires_at, inv.redeemed_at,
 			inv.user_id, inv.private_key, inv.nonce
@@ -268,16 +272,21 @@ func Invites(ctx context.Context, d types.Querier, filter *types.Filter) ([]*Inv
 	if err != nil {
 		return nil, types.LoadError{ModelName: "invites", Err: err}
 	}
+	defer func() {
+		if err = rows.Close(); err != nil {
+			rerr = fmt.Errorf("failed closing invites rows: %w", err)
+		}
+	}()
 
-	invites := []*Invite{}
-	users := map[uint64]*User{}
+	invites = make([]*Invite, 0)
+	users := make(map[uint64]*User)
 	for rows.Next() {
 		var (
 			inv          = &Invite{}
 			userID       uint64
 			privKeyBytes []byte
 		)
-		err := rows.Scan(
+		err = rows.Scan(
 			&inv.ID, &inv.UUID, &inv.CreatedAt, &inv.UpdatedAt, &inv.ExpiresAt, &inv.RedeemedAt,
 			&userID, &privKeyBytes, &inv.Nonce)
 		if err != nil {
@@ -295,13 +304,16 @@ func Invites(ctx context.Context, d types.Querier, filter *types.Filter) ([]*Inv
 		}
 		inv.User = user
 
-		privKey, err := ecdh.X25519().NewPrivateKey(privKeyBytes)
+		inv.privKey, err = ecdh.X25519().NewPrivateKey(privKeyBytes)
 		if err != nil {
 			return nil, fmt.Errorf("failed loading X25519 private key: %w", err)
 		}
-		inv.privKey = privKey
 
 		invites = append(invites, inv)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed iterating over invites rows: %w", err)
 	}
 
 	return invites, nil

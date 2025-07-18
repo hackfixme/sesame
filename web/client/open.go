@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -18,7 +19,7 @@ import (
 // have previously been authenticated via an invitation token (see [Client.Auth]),
 // after which it would've been provided a TLS client certificate it can use for
 // these priviledged requests.
-func (c *Client) Open(ctx context.Context, clients []string, serviceName string, duration time.Duration) error {
+func (c *Client) Open(ctx context.Context, clients []string, serviceName string, duration time.Duration) (rerr error) {
 	url := &url.URL{Scheme: "https", Host: c.address, Path: "/api/v1/open"}
 
 	reqData := stypes.OpenPostRequestData{
@@ -44,7 +45,11 @@ func (c *Client) Open(ctx context.Context, clients []string, serviceName string,
 	if err != nil {
 		return aerrors.NewWithCause("failed sending request", err, errFields...)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err = resp.Body.Close(); err != nil {
+			rerr = fmt.Errorf("failed closing response body: %w", err)
+		}
+	}()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -54,7 +59,7 @@ func (c *Client) Open(ctx context.Context, clients []string, serviceName string,
 	var respData stypes.OpenPostResponse
 	err = json.Unmarshal(respBody, &respData)
 	if err != nil {
-		return aerrors.NewWithCause("failed unmarshaling response body", err, errFields...)
+		return aerrors.NewWithCause("failed unmarshalling response body", err, errFields...)
 	}
 
 	errFields = append(errFields, "status_code", resp.StatusCode, "status", resp.Status)

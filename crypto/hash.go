@@ -1,3 +1,5 @@
+package crypto
+
 // cryptopasta - basic cryptography examples
 //
 // Written in 2015 by George Tankersley <george.tankersley@gmail.com>
@@ -8,7 +10,7 @@
 //
 // You should have received a copy of the CC0 Public Domain Dedication along
 // with this software. If not, see // <http://creativecommons.org/publicdomain/zero/1.0/>.
-
+//
 // Provides a recommended hashing algorithm.
 //
 // The hash function is HMAC-SHA512/256 where SHA512/256 is as described in
@@ -17,11 +19,11 @@
 // 64-bit systems.
 //
 // Password hashing uses bcrypt with a work factor of 14.
-package crypto
 
 import (
 	"crypto/hmac"
 	"crypto/sha512"
+	"fmt"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -39,11 +41,18 @@ func Hash(tag string, data []byte) []byte {
 
 // HashPassword generates a bcrypt hash of the password using work factor 14.
 func HashPassword(password []byte) ([]byte, error) {
-	return bcrypt.GenerateFromPassword(password, 14)
+	h, err := bcrypt.GenerateFromPassword(password, 14)
+	if err != nil {
+		return nil, fmt.Errorf("failed generating bcrypt hash: %w", err)
+	}
+	return h, nil
 }
 
 // CheckPasswordHash securely compares a bcrypt hashed password with its possible
 // plaintext equivalent.  Returns nil on success, or an error on failure.
 func CheckPasswordHash(hash, password []byte) error {
-	return bcrypt.CompareHashAndPassword(hash, password)
+	if err := bcrypt.CompareHashAndPassword(hash, password); err != nil {
+		return fmt.Errorf("fail comparing bcrypt hash: %w", err)
+	}
+	return nil
 }

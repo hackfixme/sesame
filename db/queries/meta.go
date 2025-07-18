@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 
 	"go.hackfix.me/sesame/db/types"
@@ -27,24 +28,33 @@ func GetServerTLSCert(ctx context.Context, d types.Querier) (
 }
 
 // GetAllTables returns a map of all table names in the database that contain user data.
-func GetAllTables(ctx context.Context, d types.Querier) (map[string]struct{}, error) {
-	allTables := make(map[string]struct{})
+func GetAllTables(ctx context.Context, d types.Querier) (allTables map[string]struct{}, rerr error) {
+	allTables = make(map[string]struct{})
 	rows, err := d.QueryContext(ctx, `SELECT name FROM sqlite_master WHERE type = 'table'`)
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if err = rows.Close(); err != nil {
+			rerr = fmt.Errorf("failed closing sqlite_master rows: %w", err)
+		}
+	}()
 
 	for rows.Next() {
 		var name string
 		err = rows.Scan(&name)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed scanning sqlite_master row: %w", err)
 		}
 
 		// Exclude internal tables
 		if !strings.HasPrefix(name, "_") {
 			allTables[name] = struct{}{}
 		}
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed iterating over sqlite_master rows: %w", err)
 	}
 
 	return allTables, nil
@@ -58,7 +68,7 @@ func Version(ctx context.Context, d types.Querier) (sql.Null[string], error) {
 	err := d.QueryRowContext(ctx, `SELECT version FROM _meta`).
 		Scan(&version)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return version, err
+		return version, fmt.Errorf("failed scanning _meta row: %w", err)
 	}
 
 	return version, nil

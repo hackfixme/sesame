@@ -55,10 +55,9 @@ func TestNewManager(t *testing.T) {
 
 	t.Run("ok/custom_logger", func(t *testing.T) {
 		t.Parallel()
-
-		logger := slog.New(slog.DiscardHandler)
-		mockFirewall := mock.New(time.Now, logger)
-		manager, err := firewall.NewManager(mockFirewall, firewall.WithLogger(logger))
+		clogger := slog.New(slog.DiscardHandler)
+		mockFirewall := mock.New(time.Now, clogger)
+		manager, err := firewall.NewManager(mockFirewall, firewall.WithLogger(clogger))
 		require.NoError(t, err)
 		assert.NotNil(t, manager)
 	})
@@ -110,6 +109,8 @@ func TestManager_AllowAccess(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			logger := slog.New(slog.DiscardHandler)
 			mockFirewall := mock.New(timeNowFn, logger)
 

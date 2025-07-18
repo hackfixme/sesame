@@ -11,6 +11,7 @@ import (
 	"go.hackfix.me/sesame/db/models"
 )
 
+//nolint:tparallel // Cannot be parallelized since the tests are expected to run in the defined sequence.
 func TestAppServiceIntegration(t *testing.T) {
 	t.Parallel()
 
@@ -223,7 +224,8 @@ func TestAppServiceIntegration(t *testing.T) {
 			h(assert.Equal(t, tt.expStdout, stdout))
 			h(assert.Equal(t, tt.expStderr, stderr))
 
-			services, err := models.Services(app.ctx.DB.NewContext(), app.ctx.DB, nil)
+			var services []*models.Service
+			services, err = models.Services(app.ctx.DB.NewContext(), app.ctx.DB, nil)
 			h(assert.NoError(t, err))
 			h(assert.Equal(t, tt.expServices, services))
 		})

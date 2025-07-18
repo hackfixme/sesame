@@ -1,3 +1,5 @@
+package crypto
+
 // cryptopasta - basic cryptography examples
 //
 // Written in 2015 by George Tankersley <george.tankersley@gmail.com>
@@ -8,19 +10,19 @@
 //
 // You should have received a copy of the CC0 Public Domain Dedication along
 // with this software. If not, see // <http://creativecommons.org/publicdomain/zero/1.0/>.
-
+//
 // Provides message authentication and asymmetric signatures.
 //
 // Message authentication: HMAC SHA512/256
 // This is a slight twist on the highly dependable HMAC-SHA256 that gains
 // performance on 64-bit systems and consistency with our hashing
 // recommendation.
-package crypto
 
 import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha512"
+	"fmt"
 	"io"
 
 	"golang.org/x/crypto/hkdf"
@@ -60,7 +62,7 @@ func DeriveHMACKey(secretKey []byte, info []byte) (*[32]byte, error) {
 	key := &[32]byte{}
 	_, err := io.ReadFull(hkdf, key[:])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed reading key: %w", err)
 	}
 
 	return key, nil

@@ -59,28 +59,30 @@ func TestAppOpenIntegration(t *testing.T) {
 		},
 	}
 
-	services := []*models.Service{
-		{
-			Name:              "web",
-			Port:              uint16(80),
-			MaxAccessDuration: time.Hour,
-		},
-		{
-			Name:              "db",
-			Port:              uint16(5432),
-			MaxAccessDuration: 30 * time.Minute,
-		},
-	}
-
-	cfg := config.Config{
-		Firewall: config.Firewall{
-			Type: sql.Null[ftypes.FirewallType]{V: ftypes.FirewallMock, Valid: true},
-		},
-	}
-
 	for _, tt := range tests {
 		args := []string{"open"}
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			services := []*models.Service{
+				{
+					Name:              "web",
+					Port:              uint16(80),
+					MaxAccessDuration: time.Hour,
+				},
+				{
+					Name:              "db",
+					Port:              uint16(5432),
+					MaxAccessDuration: 30 * time.Minute,
+				},
+			}
+
+			cfg := config.Config{
+				Firewall: config.Firewall{
+					Type: sql.Null[ftypes.FirewallType]{V: ftypes.FirewallMock, Valid: true},
+				},
+			}
+
 			tctx, cancel, h := newTestContext(t, 5*time.Second)
 			defer cancel()
 

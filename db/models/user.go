@@ -9,6 +9,7 @@ import (
 	"go.hackfix.me/sesame/db/types"
 )
 
+// User represents a remote Sesame user.
 type User struct {
 	ID        uint64
 	CreatedAt time.Time
@@ -19,16 +20,17 @@ type User struct {
 // Save stores the user data in the database.
 func (u *User) Save(ctx context.Context, d types.Querier, update bool) error {
 	timeNow := d.TimeNow().UTC()
-	if update {
+	if update { //nolint:nestif // It's fine.
 		var filter *types.Filter
 		var filterStr string
-		if u.ID != 0 {
+		switch {
+		case u.ID != 0:
 			filter = &types.Filter{Where: "id = ?", Args: []any{u.ID}}
 			filterStr = fmt.Sprintf("ID %d", u.ID)
-		} else if u.Name != "" {
+		case u.Name != "":
 			filter = &types.Filter{Where: "name = ?", Args: []any{u.Name}}
 			filterStr = fmt.Sprintf("name '%s'", u.Name)
-		} else {
+		default:
 			return errors.New("must provide either a user name or ID to update")
 		}
 
@@ -43,7 +45,7 @@ func (u *User) Save(ctx context.Context, d types.Querier, update bool) error {
 
 		n, err := res.RowsAffected()
 		if err != nil {
-			return err
+			return fmt.Errorf("failed getting affected rows: %w", err)
 		}
 		if n == 0 {
 			return types.NoResultError{ModelName: "user", ID: filterStr}
@@ -61,11 +63,10 @@ func (u *User) Save(ctx context.Context, d types.Querier, update bool) error {
 			return types.Err("user", fmt.Sprintf("name '%s'", u.Name), err)
 		}
 
-		uID, err := res.LastInsertId()
+		u.ID, err = lastInsertID(res)
 		if err != nil {
 			return err
 		}
-		u.ID = uint64(uID)
 		u.CreatedAt = timeNow
 		u.UpdatedAt = timeNow
 	}
@@ -75,6 +76,8 @@ func (u *User) Save(ctx context.Context, d types.Querier, update bool) error {
 
 // Load the user data from the database. Either the user ID or Name must be set
 // for the lookup.
+//
+//nolint:dupl // Similar method to Service.Load. "A little copying is better than a little dependency."
 func (u *User) Load(ctx context.Context, d types.Querier) error {
 	if u.ID == 0 && u.Name == "" {
 		return types.InvalidInputError{Msg: "either user ID or Name must be set"}
@@ -133,8 +136,9 @@ func (u *User) Delete(ctx context.Context, d types.Querier) error {
 		return types.Err("user", filterStr, err)
 	}
 
-	if n, err := res.RowsAffected(); err != nil {
-		return err
+	var n int64
+	if n, err = res.RowsAffected(); err != nil {
+		return fmt.Errorf("failed getting affected rows: %w", err)
 	} else if n == 0 {
 		return types.NoResultError{ModelName: "user", ID: filterStr}
 	}
@@ -144,7 +148,7 @@ func (u *User) Delete(ctx context.Context, d types.Querier) error {
 
 // Users returns one or more users from the database. An optional filter can be
 // passed to limit the results.
-func Users(ctx context.Context, d types.Querier, filter *types.Filter) ([]*User, error) {
+func Users(ctx context.Context, d types.Querier, filter *types.Filter) (users []*User, rerr error) {
 	query := `SELECT u.id, u.created_at, u.updated_at, u.name
 		FROM users u %s
 		ORDER BY u.name ASC`
@@ -162,21 +166,24 @@ func Users(ctx context.Context, d types.Querier, filter *types.Filter) ([]*User,
 	if err != nil {
 		return nil, types.LoadError{ModelName: "users", Err: err}
 	}
+	defer func() {
+		if err = rows.Close(); err != nil {
+			rerr = fmt.Errorf("failed closing users rows: %w", err)
+		}
+	}()
 
-	users := []*User{}
-	type row struct {
-		ID        uint64
-		CreatedAt time.Time
-		UpdatedAt time.Time
-		UserName  string
-	}
+	users = make([]*User, 0)
 	for rows.Next() {
-		u := User{}
-		err := rows.Scan(&u.ID, &u.CreatedAt, &u.UpdatedAt, &u.Name)
+		var u User
+		err = rows.Scan(&u.ID, &u.CreatedAt, &u.UpdatedAt, &u.Name)
 		if err != nil {
 			return nil, types.ScanError{ModelName: "user", Err: err}
 		}
 		users = append(users, &u)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed iterating over users rows: %w", err)
 	}
 
 	return users, nil

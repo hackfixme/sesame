@@ -34,7 +34,7 @@ func EncryptSymInMemory(plaintext []byte, key *[32]byte) ([]byte, error) {
 	}
 	ciphertext, err := io.ReadAll(ciphertextR)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed reading ciphertext: %w", err)
 	}
 
 	return ciphertext, nil
@@ -49,7 +49,7 @@ func DecryptSymInMemory(ciphertext []byte, key *[32]byte) ([]byte, error) {
 	}
 	plaintext, err := io.ReadAll(plaintextR)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed reading plaintext: %w", err)
 	}
 
 	return plaintext, nil
@@ -80,8 +80,8 @@ func encrypt(in io.Reader, publicKey, privateKey *[32]byte) (io.Reader, error) {
 
 	for {
 		n, err := in.Read(buf)
-		if err != nil && err != io.EOF {
-			return nil, err
+		if err != nil && !errors.Is(err, io.EOF) {
+			return nil, fmt.Errorf("failed reading data: %w", err)
 		}
 		if n == 0 {
 			break
@@ -135,7 +135,7 @@ func decrypt(in io.Reader, publicKey, privateKey *[32]byte) (io.Reader, error) {
 	for {
 		// Read the payload
 		n, err := in.Read(buf)
-		if err != nil && err != io.EOF {
+		if err != nil && !errors.Is(err, io.EOF) {
 			return nil, fmt.Errorf("failed reading payload from buffer: %w", err)
 		}
 		if n == 0 {
@@ -165,7 +165,7 @@ func decrypt(in io.Reader, publicKey, privateKey *[32]byte) (io.Reader, error) {
 func DecodeKey(keyEnc string) (*[32]byte, error) {
 	keyDec, err := base58.Decode(keyEnc)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed decoding base58: %w", err)
 	}
 	if len(keyDec) != 32 {
 		return nil, fmt.Errorf("expected key length of 32; got %d", len(keyDec))
@@ -181,7 +181,7 @@ func generateNonce() (*[nonceSize]byte, error) {
 	nonce := new([nonceSize]byte)
 	_, err := io.ReadFull(rand.Reader, nonce[:])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed generating random data: %w", err)
 	}
 
 	return nonce, nil

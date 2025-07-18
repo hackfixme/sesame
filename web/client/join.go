@@ -107,7 +107,7 @@ func (c *Client) Auth(ctx context.Context, token string) (ctypes.AuthResponseDat
 // certificate, and return it in the response body along with the client's
 // Ed25519 private key and the server's CA certificate, encrypted with the
 // shared ECDH key. This method returns the decoded but encrypted response body.
-func (c *Client) Join(ctx context.Context, token, pubKey string) ([]byte, error) {
+func (c *Client) Join(ctx context.Context, token, pubKey string) (respBodyDec []byte, rerr error) {
 	url := &url.URL{Scheme: "http", Host: c.address, Path: "/api/v1/join"}
 
 	reqCtx, cancelReqCtx := context.WithCancel(ctx)
@@ -126,7 +126,11 @@ func (c *Client) Join(ctx context.Context, token, pubKey string) ([]byte, error)
 	if err != nil {
 		return nil, aerrors.NewWithCause("failed sending request", err, errFields...)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err = resp.Body.Close(); err != nil {
+			rerr = fmt.Errorf("failed closing response body: %w", err)
+		}
+	}()
 
 	errFields = append(errFields, "status_code", resp.StatusCode, "status", resp.Status)
 	if resp.StatusCode != http.StatusOK {
@@ -138,7 +142,7 @@ func (c *Client) Join(ctx context.Context, token, pubKey string) ([]byte, error)
 		return nil, aerrors.NewWithCause("failed reading response body", err, errFields...)
 	}
 
-	respBodyDec, err := base58.Decode(string(respBody))
+	respBodyDec, err = base58.Decode(string(respBody))
 	if err != nil {
 		return nil, aerrors.NewWithCause("failed decoding response body", err, errFields...)
 	}

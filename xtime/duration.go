@@ -1,3 +1,6 @@
+// Package xtime contains time-related functionality that extends the stdlib time package.
+//
+//nolint:cyclop // The average complexity is a bit high, but acceptable.
 package xtime
 
 import (
@@ -19,7 +22,7 @@ func ParseDuration(s string) (time.Duration, error) {
 	}
 
 	re := regexp.MustCompile(`(\d*\.\d+|\d+)[^\d]*`)
-	unitMap := map[string]time.Duration{
+	unitMap := map[string]int64{
 		"d": 24,
 		"D": 24,
 		"w": 7 * 24,
@@ -32,21 +35,21 @@ func ParseDuration(s string) (time.Duration, error) {
 	strs := re.FindAllString(s, -1)
 	var sumDur time.Duration
 	for _, str := range strs {
-		var _hours time.Duration = 1
-		for unit, hours := range unitMap {
+		var hours int64 = 1
+		for unit, h := range unitMap {
 			if strings.Contains(str, unit) {
 				str = strings.ReplaceAll(str, unit, "h")
-				_hours = hours
+				hours = h
 				break
 			}
 		}
 
 		dur, err := time.ParseDuration(str)
 		if err != nil {
-			return 0, err
+			return 0, err //nolint:wrapcheck // This is a wrapper of a stdlib function.
 		}
 
-		sumDur += dur * _hours
+		sumDur += dur * time.Duration(hours)
 	}
 
 	if neg {
@@ -124,11 +127,12 @@ func FormatDuration(d time.Duration, round time.Duration) string {
 		parts = append(parts, fmt.Sprintf("%ds", seconds))
 	}
 	if remainder > 0 && round < time.Second {
-		if remainder%time.Millisecond == 0 && round <= time.Millisecond {
+		switch {
+		case remainder%time.Millisecond == 0 && round <= time.Millisecond:
 			parts = append(parts, fmt.Sprintf("%dms", remainder/time.Millisecond))
-		} else if remainder%time.Microsecond == 0 && round <= time.Microsecond {
+		case remainder%time.Microsecond == 0 && round <= time.Microsecond:
 			parts = append(parts, fmt.Sprintf("%dµs", remainder/time.Microsecond))
-		} else if round <= time.Nanosecond {
+		case round <= time.Nanosecond:
 			parts = append(parts, fmt.Sprintf("%dns", remainder/time.Nanosecond))
 		}
 	}

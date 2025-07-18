@@ -29,6 +29,7 @@ func Authn(appCtx *actx.Context, logger *slog.Logger) func(next http.Handler) ht
 
 			subjectCN := r.TLS.VerifiedChains[0][0].Subject.CommonName
 			user := &models.User{Name: subjectCN}
+			//nolint:contextcheck // This context is inherited from the global context.
 			if err := user.Load(appCtx.DB.NewContext(), appCtx.DB); err != nil {
 				logger.Warn(
 					"failed loading user with the received TLS client certificate",

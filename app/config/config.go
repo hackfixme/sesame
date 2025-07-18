@@ -95,10 +95,6 @@ type fwCfgWrapper struct {
 type srvCfgWrapper struct {
 	Address string `json:"address,omitempty"`
 }
-type svcWrapper struct {
-	Port              uint16 `json:"port"`
-	MaxAccessDuration string `json:"max_access_duration,omitempty"`
-}
 
 // MarshalJSON implements custom JSON marshaling to convert sql.Null values
 // to their underlying types, omitting invalid/null fields from the output.

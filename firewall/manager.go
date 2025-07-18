@@ -76,7 +76,7 @@ func (m *Manager) AllowAccess(ipSet *netipx.IPSet, svc *models.Service, duration
 // Setup creates a new Firewall with the given type and a Manager for it that
 // uses configured services.
 //
-//nolint:ireturn // Intentional, this is a generic function.
+//nolint:ireturn,nolintlint // Intentional, this is a generic function.
 func Setup(
 	appCtx *actx.Context, ft ftypes.FirewallType, defaultAccessDuration time.Duration,
 	logger *slog.Logger,

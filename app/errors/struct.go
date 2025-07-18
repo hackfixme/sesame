@@ -73,14 +73,15 @@ func With(err error, fields ...any) *StructuredError {
 		metadata[key] = fields[i+1]
 	}
 
-	if me, ok := err.(*StructuredError); ok {
-		combined := make(map[string]any, len(me.metadata)+len(metadata))
-		maps.Copy(combined, me.metadata)
+	var serr *StructuredError
+	if errors.As(err, &serr) {
+		combined := make(map[string]any, len(serr.metadata)+len(metadata))
+		maps.Copy(combined, serr.metadata)
 		maps.Copy(combined, metadata) // newer metadata overwrites older
 		return &StructuredError{
-			err:      me.err,
+			err:      serr.err,
 			metadata: combined,
-			cause:    me.cause,
+			cause:    serr.cause,
 		}
 	}
 
@@ -105,12 +106,13 @@ func WithCause(err error, cause error, fields ...any) *StructuredError {
 		metadata[key] = fields[i+1]
 	}
 
-	if me, ok := err.(*StructuredError); ok {
-		combined := make(map[string]any, len(me.metadata)+len(metadata))
-		maps.Copy(combined, me.metadata)
+	var serr *StructuredError
+	if errors.As(err, &serr) {
+		combined := make(map[string]any, len(serr.metadata)+len(metadata))
+		maps.Copy(combined, serr.metadata)
 		maps.Copy(combined, metadata) // newer metadata overwrites older
 		return &StructuredError{
-			err:      me.err,
+			err:      serr.err,
 			metadata: combined,
 			cause:    cause,
 		}

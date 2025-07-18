@@ -156,8 +156,8 @@ func TestCreateMigrationPlan(t *testing.T) {
 	}
 
 	for idx, tc := range testCases {
-		tc := tc
 		t.Run(fmt.Sprintf("%d", idx), func(t *testing.T) {
+			t.Parallel()
 			runPlan, err := createMigrationPlan(tc.migrations, tc.typ, tc.to)
 			if tc.expErr != "" {
 				require.EqualError(t, err, tc.expErr)

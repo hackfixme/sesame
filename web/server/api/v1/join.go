@@ -32,6 +32,8 @@ import (
 // secret key.
 //
 // See the inline comments for details about the process.
+//
+//nolint:funlen // This is well documented, and breaking it up would make it less readable.
 func (h *Handler) JoinPost(w http.ResponseWriter, r *http.Request) {
 	// 1. Extract the nonce and HMAC from the token in Authorization header.
 	token := r.Header.Get("Authorization")
@@ -43,7 +45,7 @@ func (h *Handler) JoinPost(w http.ResponseWriter, r *http.Request) {
 
 	// 2. Lookup the invite in the DB using the nonce.
 	inv := &models.Invite{Nonce: reqNonce}
-	if err := inv.Load(h.appCtx.DB.NewContext(), h.appCtx.DB); err != nil {
+	if err = inv.Load(h.appCtx.DB.NewContext(), h.appCtx.DB); err != nil {
 		var errNoRes dbtypes.NoResultError
 		if errors.As(err, &errNoRes) {
 			_ = util.WriteJSON(w, types.NewUnauthorizedError("invalid invite token"))

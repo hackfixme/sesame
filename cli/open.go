@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"crypto/tls"
 	"time"
 
 	actx "go.hackfix.me/sesame/app/context"
@@ -27,13 +28,14 @@ func (c *Open) Run(appCtx *actx.Context) error {
 		return err
 	}
 
-	if c.Remote != "" {
+	if c.Remote != "" { //nolint:nestif // It's fine.
 		r := &models.Remote{Name: c.Remote}
 		if err = r.Load(appCtx.DB.NewContext(), appCtx.DB); err != nil {
 			return err
 		}
 
-		tlsConfig, err := r.ClientTLSConfig()
+		var tlsConfig *tls.Config
+		tlsConfig, err = r.ClientTLSConfig()
 		if err != nil {
 			return err
 		}
@@ -52,7 +54,8 @@ func (c *Open) Run(appCtx *actx.Context) error {
 				"no firewall was configured on this system", "hint", "Did you forget to run 'sesame init'?")
 		}
 
-		_, fwMgr, err := firewall.Setup(
+		var fwMgr *firewall.Manager
+		_, fwMgr, err = firewall.Setup(
 			appCtx, appCtx.Config.Firewall.Type.V, appCtx.Config.Firewall.DefaultAccessDuration.V, appCtx.Logger,
 		)
 		if err != nil {
@@ -61,7 +64,7 @@ func (c *Open) Run(appCtx *actx.Context) error {
 		}
 
 		svc := &models.Service{Name: c.ServiceName}
-		if err := svc.Load(appCtx.DB.NewContext(), appCtx.DB); err != nil {
+		if err = svc.Load(appCtx.DB.NewContext(), appCtx.DB); err != nil {
 			return aerrors.NewWithCause("unknown service", err, "service.name", c.ServiceName)
 		}
 

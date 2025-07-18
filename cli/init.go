@@ -62,7 +62,7 @@ func initDB(appCtx *actx.Context) error {
 	rndSANb := make([]byte, 16)
 	_, err := rand.Read(rndSANb)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed generating random SAN: %w", err)
 	}
 	rndSAN := base58.Encode(rndSANb)
 	tlsCert, err := crypto.NewTLSCert(

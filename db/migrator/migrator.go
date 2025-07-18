@@ -45,7 +45,7 @@ func LoadMigrations(dir fs.FS) ([]*Migration, error) {
 	fnameRx := regexp.MustCompile(`^(?P<name>\d{1,}-[a-z0-9-_]+)\.(?P<type>up|down)\.sql$`)
 	migrationMap := make(map[string]*Migration)
 
-	fs.WalkDir(dir, ".", func(path string, d fs.DirEntry, e error) error {
+	err := fs.WalkDir(dir, ".", func(_ string, d fs.DirEntry, e error) error {
 		if e != nil {
 			return e
 		}
@@ -60,7 +60,7 @@ func LoadMigrations(dir fs.FS) ([]*Migration, error) {
 		}
 		data, err := fs.ReadFile(dir, d.Name())
 		if err != nil {
-			return err
+			return fmt.Errorf("failed reading file: %w", err)
 		}
 		name := matched[fnameRx.SubexpIndex("name")]
 		typ := matched[fnameRx.SubexpIndex("type")]
@@ -78,6 +78,9 @@ func LoadMigrations(dir fs.FS) ([]*Migration, error) {
 
 		return nil
 	})
+	if err != nil {
+		return nil, fmt.Errorf("failed walking directory: %w", err)
+	}
 
 	mKeys := make([]string, 0, len(migrationMap))
 	for mName := range migrationMap {
@@ -92,7 +95,7 @@ func LoadMigrations(dir fs.FS) ([]*Migration, error) {
 	return migrations, nil
 }
 
-func loadHistory(d types.Querier, migrations []*Migration) error {
+func loadHistory(d types.Querier, migrations []*Migration) (rerr error) {
 	migrationMap := make(map[string]*Migration)
 	for _, m := range migrations {
 		migrationMap[m.Name] = m
@@ -107,13 +110,18 @@ func loadHistory(d types.Querier, migrations []*Migration) error {
 	if err != nil {
 		return fmt.Errorf("failed retrieving migration history: %w", err)
 	}
+	defer func() {
+		if err = rows.Close(); err != nil {
+			rerr = fmt.Errorf("failed closing migration history rows: %w", err)
+		}
+	}()
 
 	for rows.Next() {
 		var (
 			name, typ string
 			time      sql.Null[time.Time]
 		)
-		err := rows.Scan(&name, &typ, &time)
+		err = rows.Scan(&name, &typ, &time)
 		if err != nil {
 			return fmt.Errorf("failed reading from database: %w", err)
 		}
@@ -134,6 +142,10 @@ func loadHistory(d types.Querier, migrations []*Migration) error {
 		}
 	}
 
+	if err = rows.Err(); err != nil {
+		return fmt.Errorf("failed iterating over migration history rows: %w", err)
+	}
+
 	return nil
 }
 
@@ -149,7 +161,9 @@ func RunMigrations(
 		return fmt.Errorf("failed creating migrations schema: %w", err)
 	}
 
-	loadHistory(d, migrations)
+	if err := loadHistory(d, migrations); err != nil {
+		return err
+	}
 
 	runPlan, err := createMigrationPlan(migrations, typ, to)
 	if err != nil {
@@ -163,7 +177,7 @@ func RunMigrations(
 	}
 
 	for _, run := range runPlan {
-		_, err := d.ExecContext(ctx, run.sql)
+		_, err = d.ExecContext(ctx, run.sql)
 		if err != nil {
 			return err
 		}

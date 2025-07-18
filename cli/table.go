@@ -8,7 +8,7 @@ import (
 	"github.com/olekukonko/tablewriter/tw"
 )
 
-func newTable(header []string, data [][]string, w io.Writer) *tablewriter.Table {
+func renderTable(header []string, data [][]string, w io.Writer) error {
 	table := tablewriter.NewTable(w,
 		tablewriter.WithRenderer(renderer.NewBlueprint(
 			tw.Rendition{
@@ -43,7 +43,10 @@ func newTable(header []string, data [][]string, w io.Writer) *tablewriter.Table 
 	)
 
 	table.Header(header)
-	table.Bulk(data)
+	err := table.Bulk(data)
+	if err != nil {
+		return err //nolint:wrapcheck // This is wrapped by the caller.
+	}
 
-	return table
+	return table.Render() //nolint:wrapcheck // This is wrapped by the caller.
 }

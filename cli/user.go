@@ -47,7 +47,10 @@ func (c *User) Run(kctx *kong.Context, appCtx *actx.Context) error {
 
 		if len(data) > 0 {
 			header := []string{"Name"}
-			newTable(header, data, appCtx.Stdout).Render()
+			err = renderTable(header, data, appCtx.Stdout)
+			if err != nil {
+				return aerrors.NewWithCause("failed rendering table", err)
+			}
 		}
 	}
 

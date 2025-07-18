@@ -22,14 +22,15 @@ func (em ExpirationMapper) Decode(kctx *kong.DecodeContext, target reflect.Value
 	var value string
 	err := kctx.Scan.PopValueInto("expiration", &value)
 	if err != nil {
-		return err
+		return err //nolint:wrapcheck // It's fine, this is used internally by kong.
 	}
 
 	timeNow := em.timeNow().UTC()
 
 	t, err := time.Parse(time.RFC3339, value)
 	if err != nil {
-		dur, err := xtime.ParseDuration(value)
+		var dur time.Duration
+		dur, err = xtime.ParseDuration(value)
 		if err != nil {
 			return err
 		}
