@@ -15,20 +15,89 @@ clean:
   @rm -rf "{{distdir}}" "{{covdir}}" "{{rootdir}}"/golangci-lint*.txt
   @git ls-files --others --exclude-standard | grep '_test\.go' | xargs -r rm
 
-lint report="":
-  #!/usr/bin/env sh
-  if [ -z '{{report}}' ]; then
-    golangci-lint run --timeout=5m --output.tab.path=stdout ./...
+
+[positional-arguments]
+lint *args:
+  #!/usr/bin/env bash
+  set -eEuo pipefail
+
+  # If >0, output statistics only, and write a report file with all issues.
+  # Always exits with code 0.
+  report=0
+  # If >0, limit the number of shown issues.
+  limit=0
+  # If >0, outputs statistics when report=0.
+  stats=1
+  # If >0, listen to changes in Go files, and trigger `just lint` again.
+  # Requires https://github.com/watchexec/watchexec
+  watch=0
+
+  args=(--timeout=5m --output.tab.path=stdout --allow-parallel-runners)
+
+  # It would be nice if Just supported recipe flags, so we could avoid manually
+  # parsing arguments. See https://github.com/casey/just/issues/476
+  while [ "$#" -gt 0 ]; do
+    case $1 in
+      -r|--report)      report=1 ;;
+      -l=*|--limit=*)   limit="${1##*=}" ;;
+      -s=*|--stats=*)   stats="${1##*=}" ;;
+      -w|--watch)       watch=1 ;;
+      # Other options are passed through to golangci-lint
+      *)                args+=("$1") ;;
+    esac
+    shift
+  done
+
+  if [ "$watch" -gt 0 ]; then
+    watchargs=(--quiet --shell=none --clear=reset --filter '*.go' --restart
+               --debounce 500ms --stop-timeout 1s)
+    watchexec "${watchargs[@]}" -- sh -c "just lint --limit=${limit} --stats=${stats}"
     exit $?
   fi
 
-  _report_id="$(date '+%Y%m%d')-$(git describe --tags --abbrev=10 --always)"
-  golangci-lint run --timeout 5m --output.tab.path=stdout --issues-exit-code=0 \
-      --show-stats=false ./... \
-    | tee "golangci-lint-${_report_id}.txt" \
-    | awk 'NF {if ($2 == "revive") print $2 ":" $3; else print $2}' \
-    | sed 's,:$,,' | sort | uniq -c | sort -nr \
-    | tee "golangci-lint-summary-${_report_id}.txt"
+  if [ "$report" -gt 0 ]; then
+    args+=(--issues-exit-code=0)
+  fi
+
+  # Temporarily disable exit on error so that we process the output
+  # ourselves, regardless of the exit code of golangci-lint.
+  set +e
+  output_gci="$(golangci-lint run "${args[@]}" ./...)"
+  gci_exit_code=$?
+  set -e
+
+  issues="$(echo -n "$output_gci" | sed '/^[0-9]* issues:$/q' | head -n -1)"
+  issues_sorted="$(echo -n "$issues" | sort -t: -k1,1 -k2,2n -k3,3n)"
+  issues_count="$(echo "$output_gci" | grep -o '^[0-9]* issues')"
+  issues_stats="$(echo -n "$output_gci" | sed -n '/^[0-9]* issues:$/,$p' | tail -n +2)"
+  issues_stats_sorted="$(echo -n "$issues_stats" | sort -t':' -k2 -nr)"
+  issues_stats_columns="$(echo -n "$issues_stats_sorted" | sed 's/^* //' | column -t -s':')"
+
+  if [ "$report" -gt 0 ]; then
+    _report_id="$(date '+%Y%m%d')-$(git describe --tags --abbrev=10 --always)"
+    echo -n "$issues_sorted" > "golangci-lint-${_report_id}.txt"
+    if [ -n "$issues" ]; then
+      issues_stats_columns="${issues_stats_columns}\n"
+    fi
+    echo -e -n "$issues_stats_columns" > "golangci-lint-stats-${_report_id}.txt"
+    echo "$issues_count" >> "golangci-lint-stats-${_report_id}.txt"
+    cat "golangci-lint-stats-${_report_id}.txt"
+  else
+    if [ "$limit" -gt 0 ]; then
+      issues_sorted="$(echo "$issues_sorted" | head "-${limit}")"
+    fi
+    if [ -n "$issues" ]; then
+      output="${issues_sorted}\n\n"
+      if [ "$stats" -gt 0 ]; then
+        output="${output}${issues_stats_columns}\n"
+      fi
+    fi
+    echo -n -e "${output:-}"
+    echo "$issues_count"
+  fi
+
+  exit "$gci_exit_code"
+
 
 [positional-arguments]
 test *args:
@@ -80,6 +149,7 @@ test *args:
     go tool covdata textfmt -i="{{covdir}}" -o "{{covdir}}/coverage.txt"
     fcov report "{{covdir}}/coverage.txt"
   fi
+
 
 vm-copy:
   @rsync -avLP --rsync-path="sudo rsync" -e "ssh -F '$SSH_CONFIG'" dist/ sesame-test:/usr/local/bin/
