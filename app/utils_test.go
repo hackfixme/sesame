@@ -33,7 +33,7 @@ type testApp struct {
 	flushOutputs   func() error
 }
 
-func newTestApp(ctx context.Context) (*testApp, error) {
+func newTestApp(ctx context.Context, options ...Option) (*testApp, error) {
 	// A unique name per app, to avoid clashing of in-memory SQLite DBs.
 	rndName := make([]byte, 12)
 	_, err := rand.Read(rndName)
@@ -64,6 +64,7 @@ func newTestApp(ctx context.Context) (*testApp, error) {
 		WithFS(memoryfs.New()),
 		WithLogger(false, false),
 	}
+	opts = append(opts, options...)
 	app, err := New("sesame", "/config.json", "/data", opts...)
 	if err != nil {
 		return nil, err

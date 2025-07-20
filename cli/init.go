@@ -65,9 +65,11 @@ func initDB(appCtx *actx.Context) error {
 		return fmt.Errorf("failed generating random SAN: %w", err)
 	}
 	rndSAN := base58.Encode(rndSANb)
+
+	timeNow := appCtx.TimeNow()
+	// TODO: Figure out certificate lifecycle management, make expiration configurable, etc.
 	tlsCert, err := crypto.NewTLSCert(
-		// TODO: Figure out certificate lifecycle management, make expiration configurable, etc.
-		"Sesame server", []string{rndSAN}, time.Now().Add(24*time.Hour), nil,
+		"Sesame server", []string{rndSAN}, timeNow, timeNow.Add(24*time.Hour), nil,
 	)
 	if err != nil {
 		return fmt.Errorf("failed generating the server TLS certificate: %w", err)

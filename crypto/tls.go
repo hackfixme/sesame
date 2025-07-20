@@ -50,7 +50,7 @@ func DefaultTLSConfig() *tls.Config {
 // (e.g. for client certs).
 // Reference: https://eli.thegreenplace.net/2021/go-https-servers-with-tls/
 func NewTLSCert(
-	subjectName string, san []string, expiration time.Time, parent *tls.Certificate,
+	subjectName string, san []string, timeNow, expiration time.Time, parent *tls.Certificate,
 ) (tls.Certificate, error) {
 	var tlsCert tls.Certificate
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
@@ -78,7 +78,7 @@ func NewTLSCert(
 		},
 		IsCA:      isCA,
 		DNSNames:  san,
-		NotBefore: time.Now(),
+		NotBefore: timeNow,
 		NotAfter:  expiration,
 		KeyUsage:  keyUsage,
 		ExtKeyUsage: []x509.ExtKeyUsage{

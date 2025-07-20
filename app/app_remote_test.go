@@ -30,8 +30,10 @@ func TestAppRemoteIntegration(t *testing.T) {
 	tctx, cancel, h := newTestContext(t, timeout)
 	defer cancel()
 
-	// app1 will accept remote connections
-	app1, err := newTestApp(tctx)
+	// app1 will accept remote connections.
+	// It needs to use the actual system time because TLS verification in the
+	// stdlib relies on it, which can't be mocked.
+	app1, err := newTestApp(tctx, WithTimeNow(time.Now))
 	h(assert.NoError(t, err))
 
 	err = app1.Run("init", "--firewall-type=mock")
@@ -75,7 +77,7 @@ func TestAppRemoteIntegration(t *testing.T) {
 		t.Fatalf("timed out after %s", timeout)
 	}
 
-	// app2 is the remote client that will join app1 with the generated token
+	// app2 is the remote client that will join app1 with the generated token.
 	app2, err := newTestApp(tctx)
 	h(assert.NoError(t, err))
 

@@ -27,7 +27,7 @@ func TestNewManager(t *testing.T) {
 	}{
 		{
 			name:     "ok/valid",
-			firewall: mock.New(time.Now, logger),
+			firewall: mock.New(timeNowFn, logger),
 		},
 		{
 			name:     "err/nil_firewall",
@@ -56,7 +56,7 @@ func TestNewManager(t *testing.T) {
 	t.Run("ok/custom_logger", func(t *testing.T) {
 		t.Parallel()
 		clogger := slog.New(slog.DiscardHandler)
-		mockFirewall := mock.New(time.Now, clogger)
+		mockFirewall := mock.New(timeNowFn, clogger)
 		manager, err := firewall.NewManager(mockFirewall, firewall.WithLogger(clogger))
 		require.NoError(t, err)
 		assert.NotNil(t, manager)

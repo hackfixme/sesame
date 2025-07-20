@@ -108,8 +108,10 @@ func (h *Handler) JoinPost(w http.ResponseWriter, r *http.Request) {
 
 	// 6. The client is authenticated, so create the TLS client certificate,
 	// signed by the server certificate.
+	timeNow := h.appCtx.TimeNow()
+	// TODO: Figure out certificate lifecycle management, make expiration configurable, etc.
 	clientTLSCert, err := crypto.NewTLSCert(
-		inv.User.Name, []string{serverTLSCACert.DNSNames[0]}, time.Now().Add(24*time.Hour), &serverTLSCert,
+		inv.User.Name, []string{serverTLSCACert.DNSNames[0]}, timeNow, timeNow.Add(24*time.Hour), &serverTLSCert,
 	)
 	if err != nil {
 		_ = util.WriteJSON(w, types.NewInternalError(err.Error()))

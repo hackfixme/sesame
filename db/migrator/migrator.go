@@ -188,7 +188,7 @@ func RunMigrations(
 		_, err = d.ExecContext(ctx, `
 			INSERT INTO _migration_history (name, type, time)
 			VALUES ($1, $2, $3);
-			`, run.name, string(run.typ), time.Now().UTC())
+			`, run.name, string(run.typ), d.TimeNow().UTC())
 		if err != nil {
 			return err
 		}
