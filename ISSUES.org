@@ -1,0 +1,198 @@
+#+TITLE: Sesame Issues
+#+TODO: INPROGRESS | DONE WONTFIX
+#+FILETAGS: :sesame:issues:
+
+* [#A] Implement remote remove and update commands               :feature:cli:
+:PROPERTIES:
+:ID:       1
+:CREATED:  [2025-07-22 Tue 13:56]
+:END:
+
+cli/remote.go:75:
+cli/remote.go:77:
+db/models/remote.go:131:
+
+The =update= command should have a =--new-name= flag. Or maybe this should be a separate =remote rename= command?
+
+
+* [#A] Implement close command                                   :feature:cli:
+:PROPERTIES:
+:ID:       2
+:CREATED:  [2025-07-22 Tue 14:50:02]
+:END:
+
+There's currently an =open= command, but not its =close= counterpart to remove access to a service.
+
+It should support both removing access to a single IP address or range, or to the entire service.
+
+
+* Implement TLS certificate lifecycle management            :feature:security:
+:PROPERTIES:
+:ID:       3
+:CREATED:  [2025-07-22 Tue 13:58]
+:END:
+
+TLS certificates are currently hardcoded to expire after 24 hours:
+cli/init.go:71:
+web/server/api/v1/join.go:113:
+
+We need a simple and intuitive way of handling renewals, revocations, and any other relevant operation.
+
+Here's a list of TLS-related operations that Sonnet 4 came up with which should be done by a system that manages TLS certificates. I filled out the Status and Notes fields.
+| Category                   | Operation                          | Description                                                    | Status | Notes |
+|----------------------------+------------------------------------+----------------------------------------------------------------+--------+-------|
+| Creation & Issuance        | Certificate generation             | Generate public/private key pairs and certificate requests     | ✅    |       |
+|                            | Certificate signing                | Sign certificates using CA or self-signing processes           | ✅    |       |
+|                            | Certificate validation             | Validate certificate format, fields, and policies before issue | ✅    | This is partly done implicitly. |
+|                            | Certificate enrollment             | Manage workflows for certificate requests and approvals        | ✅    |       |
+|----------------------------+------------------------------------+----------------------------------------------------------------+--------+-------|
+| Deployment & Distribution  | Certificate installation           | Install certificates on target systems and services            | ✅    |       |
+|                            | Certificate distribution           | Distribute certificates to multiple endpoints automatically    | ❌    | Certs are distributed from the server to a single client at a time. |
+|                            | Configuration updates              | Update service configurations to use new certificates          | ❌    |       |
+|                            | Automated deployment               | Implement CI/CD pipelines for certificate deployment           | ❌    |       |
+|----------------------------+------------------------------------+----------------------------------------------------------------+--------+-------|
+| Monitoring & Tracking      | Certificate inventory              | Maintain centralized inventory of all certificates             | ❌    | The server only stores its own certificate. The client certificate it generates is sent to and stored on the client. |
+|                            | Expiration monitoring              | Monitor certificate expiration dates and send alerts           | ❓    | Active monitoring and alerting seems out of scope, but there should be warnings, and an easy way to renew valid and expired certs. |
+|                            | Usage tracking                     | Track where and how certificates are being used                | ⚪    | Audit/activity logging is planned. |
+|                            | Compliance reporting               | Generate reports for audit and compliance requirements         | ❓    |       |
+|----------------------------+------------------------------------+----------------------------------------------------------------+--------+-------|
+| Renewal & Updates          | Automatic renewal                  | Automatically renew certificates before expiration             | ⚪    | Seems like the way to go. |
+|                            | Certificate replacement            | Replace certificates with minimal service disruption           | ⚪    | Same as above. Automatic renewals should be transparent to the client. |
+|                            | Rolling updates                    | Update certificates across clusters with zero downtime         | ❌    | Each client will have to request a renewal. |
+|                            | Renewal failure handling           | Handle and alert on certificate renewal failures               | ⚪    | Sure, in the response for the renewal request. |
+|----------------------------+------------------------------------+----------------------------------------------------------------+--------+-------|
+| Revocation & Security      | Certificate revocation             | Revoke compromised or invalid certificates                     | ⚪    | Must have. Client certificates should be revocable per invite or per user. |
+|                            | Revocation list management         | Maintain and publish CRL/OCSP responder services               | ❌️   | Seems overkill and out of scope for a self-contained system. |
+|                            | Compromise response                | Respond to security incidents involving certificate compromise | ❌    | Seems out of scope. |
+|                            | Emergency revocation               | Rapidly revoke certificates in emergency situations            | ⚪    | Sure, could be done by revoking the server's CA cert. |
+|----------------------------+------------------------------------+----------------------------------------------------------------+--------+-------|
+| Operational Management     | Backup and recovery                | Backup certificates, keys, and configuration data              | ❌    | The user can backup the DB and config on their own. |
+|                            | Key rotation                       | Rotate cryptographic keys according to security policies       | ❌    | Out of scope. |
+|                            | Archive management                 | Archive expired certificates for compliance and forensics      | ❓    |       |
+|                            | Integration APIs                   | Provide APIs for external systems and automation tools         | ✅    |       |
+|                            | Audit logging                      | Log all certificate operations for security and compliance     | ⚪    |       |
+|                            | Role-based access control          | Control access to certificate operations based on user roles   | ✅    | RBAC is not used, but invite tokens and client certs provide access control. |
+|----------------------------+------------------------------------+----------------------------------------------------------------+--------+-------|
+| Validation & Health Checks | Certificate chain validation       | Validate complete certificate chains and trust paths           | ❌    | The entire chain is self-contained and managed. |
+|                            | Endpoint connectivity testing      | Test SSL/TLS connectivity to certificate-enabled services      | ❌    | Done implicitly by the client. |
+|                            | SSL/TLS configuration verification | Verify proper SSL/TLS configuration on target systems          | ❌    | Managed internally. |
+|                            | Security policy compliance         | Ensure certificates meet organizational security policies      | ❌    | Maybe in the far future? |
+
+*Legend*:
+- ✅: Done
+- 🔄: In Progress
+- ⚪: Planned / Not Started
+- ⚠️: Needs Research / Attention
+- ❌: Not Applicable
+- ❓: Maybe?
+
+
+* Hide descriptive error messages in /join responses    :enhancement:security:
+:PROPERTIES:
+:ID:       4
+:CREATED:  [2025-07-22 Tue 13:58]
+:END:
+
+
+
+Currently responses from the =/join= API endpoint include descriptive error messages.
+web/server/api/v1/join.go:37:
+
+Such as =invalid invite token=, =failed deriving HMAC key=, etc.
+
+This is helpful for troubleshooting, but it's also information that could be useful for attackers.
+
+All other endpoints behind TLS auth should continue to return descriptive messages, since those clients are trusted.
+
+** Suggested solution
+
+Remove descriptive messages from responses of public endpoints, and respond with status codes only.
+
+Descriptive messages in responses should be configurable by setting an environment variable, such as =SESAME_LOG_LEVEL=DEBUG=.
+
+
+* Return cancel function from DB.NewContext                      :enhancement:
+:PROPERTIES:
+:ID:       5
+:CREATED:  [2025-07-22 Tue 14:05:25]
+:END:
+
+The current =DB.NewContext= method returns a new database context created as a child from a parent context, but not its cancellation function:
+db/db.go:61:
+
+This child context is meant to be used in DB operations, and I didn't return the cancellation function out of convenience. Technicaly, there isn't any risk of context leaks, since these contexts will be cancelled when the parent is cancelled, which is guaranteed to happen (I think...).
+
+But this is a code smell anyway, and doing this properly trumps convenience.
+
+So return the cancellation function as well, and cancel the context as usual.
+
+
+
+* Update firewall rules on service changes                           :feature:
+:PROPERTIES:
+:ID:       6
+:CREATED:  [2025-07-22 Tue 14:12:30]
+:END:
+
+Currently services are just a friendly mapping for a local port, and use a simple CRUD CLI to manage them.
+cli/service.go:36:
+
+An important feature to have is for any service changes to also update firewall rules.
+
+For example:
+
+- Removing a service should also remove any associated firewall rules.
+
+- Updating a service port should also update the port in any associated firewall rules.
+
+
+* [#C] Improve log handling                                      :enhancement:
+:PROPERTIES:
+:ID:       7
+:CREATED:  [2025-07-22 Tue 14:18:52]
+:END:
+
+The current structured log handling has a couple of issues.
+
+For example, the =component= field is used in multiple places:
+web/client/client.go:35:
+web/server/server.go:45:
+firewall/manager_option.go:22:
+
+... with the intention that this can be overridden. The problem is that slog doesn't override same field names, but outputs them as duplicate. This might be a desired behavior, but it doesn't make sense with how this field was meant to be used.
+
+Instead, it would be better to use [[https://pkg.go.dev/log/slog#hdr-Groups][Groups]] as a way to group related fields, and avoiding the name clashing. Perhaps =source= might be a better name for the =component= field, in which case it could be more specific and include the file path or even line number where the log event was triggered(?).
+
+Groups could also avoid using underscore as an implicit way of grouping, which is done here:
+web/server/api/v1/open.go:25:
+
+
+* [#C] Resolve minor TODOs                                              :task:
+:PROPERTIES:
+:ID:       8
+:CREATED:  [2025-07-22 Tue 14:31:17]
+:END:
+
+There are some lower priority TODOs sprinkled around the codebase:
+db/migrator/migrator.go:58:                     // TODO: Log warning
+db/migrator/migrator.go:173:    // TODO: Ask user for confirmation before running the plan.
+db/models/invite.go:296:                // TODO: Load users in the same query for efficiency
+cli/invite.go:123:              // TODO: Add a bulk deletion method?
+test/bin/utils.sh:3:# TODO: Disable color when stdout is not a tty
+
+These are not important, but should be resolved eventually.
+
+
+* Show firewall rules                                                :feature:
+:PROPERTIES:
+:ID:       9
+:CREATED:  [2025-07-22 Tue 14:42:43]
+:END:
+
+Currently there's no way for the user to see the firewall rules managed by Sesame. I've been developing and testing with the =nft= CLI, but this shouldn't be expected of users. Sesame is supposed to abstract away the firewall implementation.
+
+** Suggested implementation
+
+Add a top-level =list= or =show= command to display the current rules as they exist in the firewall. This should be a table that shows data using the same terminology and concepts as Sesame, not simply a wrapper around the firewall output.
+
+So at the very least it should show the service name, port, allowed clients, and expiration time.
