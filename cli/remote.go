@@ -72,7 +72,10 @@ func (r *Remote) Run(kctx *kong.Context, appCtx *actx.Context) error {
 			}
 		}
 	case "remote remove <name>":
-		// TODO: Implement.
+		remote := &models.Remote{Name: r.Remove.Name}
+		if err := remote.Delete(dbCtx, appCtx.DB); err != nil {
+			return aerrors.NewWithCause("failed removing remote", err)
+		}
 	case "remote update <name> <address>":
 		// TODO: Implement.
 	}

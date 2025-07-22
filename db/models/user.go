@@ -114,6 +114,8 @@ func (u *User) Load(ctx context.Context, d types.Querier) error {
 
 // Delete removes the user data from the database. Either the user ID or Name
 // must be set for the lookup. It returns an error if the user doesn't exist.
+//
+//nolint:dupl // Similar method to Remote.Delete. "A little copying is better than a little dependency."
 func (u *User) Delete(ctx context.Context, d types.Querier) error {
 	if u.ID == 0 && u.Name == "" {
 		return types.InvalidInputError{Msg: "either user ID or Name must be set"}

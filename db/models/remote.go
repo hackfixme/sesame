@@ -127,8 +127,37 @@ func (r *Remote) Load(ctx context.Context, d types.Querier) error {
 
 // Delete removes the remote record from the database. Either the remote ID or
 // name must be set for the lookup.
-func (r *Remote) Delete(_ context.Context, _ types.Querier) error {
-	// TODO: Implement
+//
+//nolint:dupl // Similar method to Service.Delete. "A little copying is better than a little dependency."
+func (r *Remote) Delete(ctx context.Context, d types.Querier) error {
+	if r.ID == 0 && r.Name == "" {
+		return types.InvalidInputError{Msg: "either remote ID or Name must be set"}
+	}
+
+	var filter *types.Filter
+	var filterStr string
+	if r.ID != 0 {
+		filter = &types.Filter{Where: "id = ?", Args: []any{r.ID}}
+		filterStr = fmt.Sprintf("ID %d", r.ID)
+	} else if r.Name != "" {
+		filter = &types.Filter{Where: "name = ?", Args: []any{r.Name}}
+		filterStr = fmt.Sprintf("name '%s'", r.Name)
+	}
+
+	stmt := fmt.Sprintf(`DELETE FROM remotes WHERE %s`, filter.Where)
+
+	res, err := d.ExecContext(ctx, stmt, filter.Args...)
+	if err != nil {
+		return types.Err("remote", filterStr, err)
+	}
+
+	var n int64
+	if n, err = res.RowsAffected(); err != nil {
+		return fmt.Errorf("failed getting affected rows: %w", err)
+	} else if n == 0 {
+		return types.NoResultError{ModelName: "remote", ID: filterStr}
+	}
+
 	return nil
 }
 

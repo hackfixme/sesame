@@ -2,7 +2,7 @@
 #+TODO: INPROGRESS | DONE WONTFIX
 #+FILETAGS: :sesame:issues:
 
-* [#A] Implement remote remove and update commands               :feature:cli:
+* INPROGRESS [#A] Implement remote remove and update commands    :feature:cli:
 :PROPERTIES:
 :ID:       1
 :CREATED:  [2025-07-22 Tue 13:56]

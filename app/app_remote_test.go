@@ -119,4 +119,12 @@ func TestAppRemoteIntegration(t *testing.T) {
 	var serr *aerrors.StructuredError
 	h(assert.ErrorAs(t, err, &serr))
 	h(assert.Equal(t, http.StatusUnauthorized, serr.Metadata()["status_code"]))
+
+	err = app2.Run("remote", "rm", "testremote")
+	h(assert.NoError(t, err))
+
+	err = app2.Run("remote", "ls")
+	h(assert.NoError(t, err))
+	h(assert.Equal(t, "", app2.stdout.String()))
+	h(assert.Equal(t, "", app2.stderr.String()))
 }

@@ -118,6 +118,8 @@ func (s *Service) Load(ctx context.Context, d types.Querier) error {
 
 // Delete removes the service data from the database. Either the service ID or Name
 // must be set for the lookup. It returns an error if the service doesn't exist.
+//
+//nolint:dupl // Similar method to Remote.Delete. "A little copying is better than a little dependency."
 func (s *Service) Delete(ctx context.Context, d types.Querier) error {
 	if s.ID == 0 && s.Name == "" {
 		return types.InvalidInputError{Msg: "either user ID or Name must be set"}
