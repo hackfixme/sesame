@@ -25,9 +25,10 @@ type Remote struct {
 		Name string `arg:"" help:"The unique name of the remote."`
 	} `cmd:"" aliases:"rm" help:"Delete a remote node."`
 	Update struct {
-		Name string `arg:"" help:"The unique name of the remote."`
+		Name    string `arg:"" help:"The unique name of the remote."`
+		NewName string `help:"A new name to set for this remote."`
 		//nolint:lll // Long struct tags are unavoidable.
-		Address string `arg:"" help:"The remote address in 'host[:port]' format, where 'host' can be a DNS hostname or an IP address."`
+		Address string `help:"The remote address in 'host[:port]' format, where 'host' can be a DNS hostname or an IP address."`
 	} `cmd:"" help:"Update a remote node."`
 }
 
@@ -51,7 +52,7 @@ func (r *Remote) Run(kctx *kong.Context, appCtx *actx.Context) error {
 			r.Add.Name, r.Add.Address, response.TLSCACert, response.TLSClientCert,
 		)
 		if err = remote.Save(dbCtx, appCtx.DB, false); err != nil {
-			return err
+			return aerrors.NewWithCause("failed saving remote to the database", err)
 		}
 	case "remote list":
 		remotes, err := models.Remotes(dbCtx, appCtx.DB, nil)
@@ -76,8 +77,20 @@ func (r *Remote) Run(kctx *kong.Context, appCtx *actx.Context) error {
 		if err := remote.Delete(dbCtx, appCtx.DB); err != nil {
 			return aerrors.NewWithCause("failed removing remote", err)
 		}
-	case "remote update <name> <address>":
-		// TODO: Implement.
+	case "remote update <name>":
+		remote := &models.Remote{Name: r.Update.Name}
+		if err := remote.Load(dbCtx, appCtx.DB); err != nil {
+			return aerrors.NewWithCause("failed loading remote", err, "name", r.Update.Name)
+		}
+		if r.Update.NewName != "" {
+			remote.Name = r.Update.NewName
+		}
+		if r.Update.Address != "" {
+			remote.Address = r.Update.Address
+		}
+		if err := remote.Save(dbCtx, appCtx.DB, true); err != nil {
+			return aerrors.NewWithCause("failed saving remote to the database", err)
+		}
 	}
 
 	return nil

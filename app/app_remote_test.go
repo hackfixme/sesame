@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -87,13 +88,28 @@ func TestAppRemoteIntegration(t *testing.T) {
 	err = app2.Run("remote", "add", "testremote", srvAddress, token)
 	h(assert.NoError(t, err))
 
+	err = app2.Run("remote", "ls")
+	h(assert.NoError(t, err))
+	h(assert.Contains(t, app2.stdout.String(), fmt.Sprintf("testremote  %s", srvAddress)))
+	err = app2.flushOutputs()
+	h(assert.NoError(t, err))
+
+	err = app2.Run("remote", "update", "testremote", "--new-name=testremoteupd")
+	h(assert.NoError(t, err))
+
+	err = app2.Run("remote", "ls")
+	h(assert.NoError(t, err))
+	h(assert.Contains(t, app2.stdout.String(), fmt.Sprintf("testremoteupd  %s", srvAddress)))
+	err = app2.flushOutputs()
+	h(assert.NoError(t, err))
+
 	// The service doesn't exist for app2 locally...
 	err = app2.Run("open", "python", "10.0.0.10")
 	h(assert.EqualError(t, err, "unknown service"))
 	h(assert.Equal(t, "", app2.stdout.String()))
 
 	// ... but it does exist on the remote node.
-	err = app2.Run("open", "--remote=testremote", "python", "10.0.0.10", "--duration=1h")
+	err = app2.Run("open", "--remote=testremoteupd", "python", "10.0.0.10", "--duration=1h")
 	h(assert.NoError(t, err))
 	h(assert.Equal(t, "", app2.stdout.String()))
 
@@ -120,7 +136,7 @@ func TestAppRemoteIntegration(t *testing.T) {
 	h(assert.ErrorAs(t, err, &serr))
 	h(assert.Equal(t, http.StatusUnauthorized, serr.Metadata()["status_code"]))
 
-	err = app2.Run("remote", "rm", "testremote")
+	err = app2.Run("remote", "rm", "testremoteupd")
 	h(assert.NoError(t, err))
 
 	err = app2.Run("remote", "ls")
