@@ -110,9 +110,8 @@ func TestManager_GrantAccess(t *testing.T) {
 			t.Parallel()
 
 			mockFirewall := mock.New(timeNowFn)
-
 			// For the firewall allow failure test, we need to create the manager first
-			// (without error) then set the error for the Allow operation.
+			// (without error) then set the error before the Allow operation.
 			manager, err := firewall.NewManager(
 				mockFirewall, firewall.WithLogger(slog.New(slog.DiscardHandler)),
 			)
@@ -135,14 +134,90 @@ func TestManager_GrantAccess(t *testing.T) {
 			require.NoError(t, err)
 
 			for _, ipRange := range ipSet.Ranges() {
-				ports, exists := mockFirewall.Allowed[ipRange.String()]
-				assert.True(t, exists, "IP range %s should be in allowed list", ipRange)
+				require.Contains(t, mockFirewall.Allowed, ipRange.String())
 
+				ports := mockFirewall.Allowed[ipRange.String()]
 				expectedDuration := min(tt.duration, svc.MaxAccessDuration)
 				expectedExpiry := timeNow.Add(expectedDuration)
 				actualExpiry, portExists := ports[svc.Port]
 				assert.True(t, portExists, "Port %d should be allowed for IP range %s", svc.Port, ipRange)
 				assert.Equal(t, expectedExpiry, actualExpiry)
+			}
+		})
+	}
+}
+
+func TestManager_DenyAccess(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		ipAddr     []string
+		setupError bool
+		expErr     string
+	}{
+		{
+			name:   "ok/single_ip",
+			ipAddr: []string{"192.168.1.100"},
+		},
+		{
+			name:   "ok/multiple_ips",
+			ipAddr: []string{"192.168.1.100", "10.0.0.5"},
+		},
+		{
+			name:   "ok/cidr_notation",
+			ipAddr: []string{"192.168.1.0/24"},
+		},
+		{
+			name:   "ok/ip_range",
+			ipAddr: []string{"192.168.1.1-192.168.1.10"},
+		},
+		{
+			name:       "err/firewall_deny_fails",
+			ipAddr:     []string{"192.168.1.100"},
+			setupError: true,
+			expErr:     "firewall error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mockFirewall := mock.New(timeNowFn)
+			// For the firewall deny failure test, we need to create the manager first
+			// (without error) then set the error before Deny operation.
+			manager, err := firewall.NewManager(
+				mockFirewall, firewall.WithLogger(slog.New(slog.DiscardHandler)),
+			)
+			require.NoError(t, err)
+
+			if tt.setupError {
+				mockFirewall.SetFailError(errors.New("firewall error"))
+			}
+
+			svc := &models.Service{Name: "web", Port: 8080, MaxAccessDuration: time.Hour}
+
+			ipSet, err := firewall.ParseToIPSet(tt.ipAddr...)
+			require.NoError(t, err)
+
+			// Mock a previously allowed access
+			for _, ipRange := range ipSet.Ranges() {
+				mockFirewall.Allowed[ipRange.String()] = map[uint16]time.Time{
+					svc.Port: timeNow.Add(30 * time.Minute),
+				}
+			}
+
+			err = manager.DenyAccess(ipSet, svc)
+			if tt.expErr != "" {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tt.expErr)
+				return
+			}
+			require.NoError(t, err)
+
+			for _, ipRange := range ipSet.Ranges() {
+				assert.NotContains(t, mockFirewall.Allowed, ipRange.String())
 			}
 		})
 	}

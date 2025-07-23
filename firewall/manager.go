@@ -77,6 +77,32 @@ func (m *Manager) GrantAccess(ipSet *netipx.IPSet, svc *models.Service, duration
 	return nil
 }
 
+// DenyAccess to the specified service from a set of IP addresses. The passed
+// IPSet must consist of valid IPRanges.
+func (m *Manager) DenyAccess(ipSet *netipx.IPSet, svc *models.Service) error {
+	ipRanges := ipSet.Ranges()
+	ipRangesStr := make([]string, len(ipRanges))
+	for i, r := range ipRanges {
+		if !r.IsValid() {
+			return fmt.Errorf("invalid IP address range: %s", r)
+		}
+		ipRangesStr[i] = r.String()
+	}
+
+	logger := m.logger.With(
+		"service.name", svc.Name,
+		"service.port", svc.Port,
+	)
+
+	if err := m.firewall.Deny(ipSet, svc.Port); err != nil {
+		return err
+	}
+
+	logger.Info("denied access", "ip_ranges", ipRangesStr)
+
+	return nil
+}
+
 // Setup creates a new Firewall with the given type and a Manager for it.
 //
 //nolint:ireturn,nolintlint // Intentional, this is a generic function.
