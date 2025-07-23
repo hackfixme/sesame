@@ -2,7 +2,7 @@ package types
 
 import "time"
 
-// OpenPostRequestData is the request data to grant access to one or more
+// OpenPostRequestData is the request data to grant access of one or more
 // clients to a service.
 type OpenPostRequestData struct {
 	Clients     []string      `json:"clients"`

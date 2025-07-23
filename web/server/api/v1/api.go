@@ -24,6 +24,7 @@ func SetupHandlers(appCtx *actx.Context, logger *slog.Logger) http.Handler {
 
 	mux.HandleFunc("POST /join", h.JoinPost)
 	mux.Handle("POST /open", mwChain.HandlerFunc(h.OpenPost))
+	mux.Handle("POST /close", mwChain.HandlerFunc(h.ClosePost))
 
 	return mux
 }

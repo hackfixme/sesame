@@ -8,24 +8,22 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"time"
 
 	aerrors "go.hackfix.me/sesame/app/errors"
 	stypes "go.hackfix.me/sesame/web/server/types"
 )
 
-// Open grants access from the specified IP addresses to the specified service for
-// the specified duration on a remote Sesame node. The client is expected to
-// have previously been authenticated via an invitation token (see [Client.Auth]),
-// after which it would've been provided a TLS client certificate it can use for
-// these priviledged requests.
-func (c *Client) Open(ctx context.Context, clients []string, serviceName string, duration time.Duration) (rerr error) {
-	url := &url.URL{Scheme: "https", Host: c.address, Path: "/api/v1/open"}
+// Close denies access from the specified IP addresses to the specified service
+// on a remote Sesame node. The client is expected to have previously been
+// authenticated via an invitation token (see [Client.Auth]), after which it
+// would've been provided a TLS client certificate it can use for these
+// priviledged requests.
+func (c *Client) Close(ctx context.Context, clients []string, serviceName string) (rerr error) {
+	url := &url.URL{Scheme: "https", Host: c.address, Path: "/api/v1/close"}
 
-	reqData := stypes.OpenPostRequestData{
+	reqData := stypes.ClosePostRequestData{
 		Clients:     clients,
 		ServiceName: serviceName,
-		Duration:    duration,
 	}
 
 	errFields := []any{"url", url.String(), "method", http.MethodPost}
@@ -56,7 +54,7 @@ func (c *Client) Open(ctx context.Context, clients []string, serviceName string,
 		return aerrors.NewWithCause("failed reading response body", err, errFields...)
 	}
 
-	var respData stypes.OpenPostResponse
+	var respData stypes.ClosePostResponse
 	err = json.Unmarshal(respBody, &respData)
 	if err != nil {
 		return aerrors.NewWithCause("failed unmarshalling response body", err, errFields...)

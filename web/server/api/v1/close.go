@@ -12,10 +12,10 @@ import (
 	"go.hackfix.me/sesame/web/server/types"
 )
 
-// OpenPost creates firewall rules that grant access from specified IP addresses
+// ClosePost creates firewall rules that block access from specified IP addresses
 // to services on this node. The client is expected to already have been
 // authenticated with a TLS certificate (mTLS).
-func (h *Handler) OpenPost(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ClosePost(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(types.ConnTLSUserKey).(*models.User)
 	if !ok {
 		_ = util.WriteJSON(w, types.NewUnauthorizedError("user object not found in the request context"))
@@ -45,14 +45,20 @@ func (h *Handler) OpenPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var reqData types.OpenPostRequestData
+	var reqData types.ClosePostRequestData
 	err = json.Unmarshal(reqBody, &reqData)
 	if err != nil {
 		_ = util.WriteJSON(w, types.NewBadRequestError(err.Error()))
 		return
 	}
 
-	ipSet, err := firewall.ParseToIPSet(reqData.Clients...)
+	// Assume that if no clients were specified, the service should be closed for all.
+	clients := reqData.Clients
+	if len(clients) == 0 {
+		clients = []string{"0.0.0.0/0", "::/0"}
+	}
+
+	ipSet, err := firewall.ParseToIPSet(clients...)
 	if err != nil {
 		_ = util.WriteJSON(w, types.NewBadRequestError(err.Error()))
 		return
@@ -64,7 +70,7 @@ func (h *Handler) OpenPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = fwMgr.GrantAccess(ipSet, svc, reqData.Duration)
+	err = fwMgr.DenyAccess(ipSet, svc)
 	if err != nil {
 		_ = util.WriteJSON(w, types.NewBadRequestError(err.Error()))
 		return
