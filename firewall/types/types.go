@@ -36,4 +36,7 @@ type Firewall interface {
 	// Allow grants access to the destination port from a set of IP addresses for
 	// a specific amount of time.
 	Allow(ipSet *netipx.IPSet, destPort uint16, duration time.Duration) error
+
+	// Deny blocks access to the destination port from a set of IP addresses.
+	Deny(ipSet *netipx.IPSet, destPort uint16) error
 }

@@ -380,24 +380,7 @@ func (n *NFTables) Init() (err error) {
 // Allow grants access to the destination port from a set of IP addresses for a
 // specific amount of time.
 func (n *NFTables) Allow(ipSet *netipx.IPSet, destPort uint16, duration time.Duration) error {
-	// Port in binary network byte order (big endian)
-	portBytes := make([]byte, 2)
-	binary.BigEndian.PutUint16(portBytes, destPort)
-
-	sets := make(map[int][]gnft.SetElement)
-	for _, ipRange := range ipSet.Ranges() {
-		keyStart := slices.Concat(ipRange.From().AsSlice(), portBytes)
-		keyEnd := slices.Concat(ipRange.To().AsSlice(), portBytes)
-
-		setEl := gnft.SetElement{
-			Key:     keyStart,
-			KeyEnd:  keyEnd,
-			Timeout: duration,
-		}
-
-		bitLen := ipRange.From().BitLen()
-		sets[bitLen] = append(sets[bitLen], setEl)
-	}
+	sets := nftSetElements(ipSet, destPort, duration)
 
 	for bitLen, setEls := range sets {
 		err := n.conn.SetAddElements(n.allowed[bitLen], setEls)
@@ -411,4 +394,45 @@ func (n *NFTables) Allow(ipSet *netipx.IPSet, destPort uint16, duration time.Dur
 	}
 
 	return nil
+}
+
+// Deny blocks access to the destination port from an IP address range.
+func (n *NFTables) Deny(ipSet *netipx.IPSet, destPort uint16) error {
+	sets := nftSetElements(ipSet, destPort, 0)
+
+	for bitLen, setEls := range sets {
+		err := n.conn.SetDeleteElements(n.allowed[bitLen], setEls)
+		if err != nil {
+			return fmt.Errorf("failed deleting elements from set: %w", err)
+		}
+	}
+
+	if err := n.conn.Flush(); err != nil {
+		return fmt.Errorf("failed flushing rules: %w", err)
+	}
+	return nil
+}
+
+// nftSetElements converts a set of IP addresses to nftables set elements.
+func nftSetElements(ipSet *netipx.IPSet, port uint16, timeout time.Duration) map[int][]gnft.SetElement {
+	// Port in binary network byte order (big endian)
+	portBytes := make([]byte, 2)
+	binary.BigEndian.PutUint16(portBytes, port)
+
+	sets := make(map[int][]gnft.SetElement)
+	for _, ipRange := range ipSet.Ranges() {
+		keyStart := slices.Concat(ipRange.From().AsSlice(), portBytes)
+		keyEnd := slices.Concat(ipRange.To().AsSlice(), portBytes)
+
+		setEl := gnft.SetElement{
+			Key:     keyStart,
+			KeyEnd:  keyEnd,
+			Timeout: timeout,
+		}
+
+		bitLen := ipRange.From().BitLen()
+		sets[bitLen] = append(sets[bitLen], setEl)
+	}
+
+	return sets
 }

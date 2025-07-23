@@ -37,6 +37,9 @@ func (m *Mock) Init() error {
 // Allow grants access to the destination port from a set of IP addresses for a
 // specific amount of time. It returns the configured failure error if one is
 // set, otherwise tracks the allowance with expiration time.
+// Note that this implementation doesn't handle overlapping IP addresses as a
+// real firewall would. It identifies IP ranges based only on their string
+// representation.
 func (m *Mock) Allow(ipSet *netipx.IPSet, destPort uint16, duration time.Duration) error {
 	if m.failErr != nil {
 		return m.failErr
@@ -50,6 +53,33 @@ func (m *Mock) Allow(ipSet *netipx.IPSet, destPort uint16, duration time.Duratio
 			m.Allowed[ipStr] = ports
 		}
 		ports[destPort] = m.timeNow().Add(duration)
+	}
+
+	return nil
+}
+
+// Deny blocks access to the destination port from a set of IP addresses.
+// Note that this implementation doesn't handle overlapping IP addresses as a
+// real firewall would. It identifies IP ranges based only on their string
+// representation.
+func (m *Mock) Deny(ipSet *netipx.IPSet, destPort uint16) error {
+	if m.failErr != nil {
+		return m.failErr
+	}
+
+	for _, ipRange := range ipSet.Ranges() {
+		ipStr := ipRange.String()
+		ports, ok := m.Allowed[ipStr]
+		if !ok {
+			continue
+		}
+
+		delete(ports, destPort)
+		m.Allowed[ipStr] = ports
+
+		if len(ports) == 0 {
+			delete(m.Allowed, ipStr)
+		}
 	}
 
 	return nil
