@@ -39,42 +39,45 @@ func NewManager(firewall ftypes.Firewall, opts ...Option) (*Manager, error) {
 	return m, nil
 }
 
-// AllowAccess allows access of client IP addresses to a service for a specific
-// duration. The passed IPSet must consist of valid IPRanges.
-func (m *Manager) AllowAccess(ipSet *netipx.IPSet, svc *models.Service, duration time.Duration) error {
+// GrantAccess to the specified service from a set of IP addresses for a
+// specific amount of time. The passed IPSet must consist of valid IPRanges.
+func (m *Manager) GrantAccess(ipSet *netipx.IPSet, svc *models.Service, duration time.Duration) error {
+	ipRanges := ipSet.Ranges()
+	ipRangesStr := make([]string, len(ipRanges))
+	for i, r := range ipRanges {
+		if !r.IsValid() {
+			return fmt.Errorf("invalid IP address range: %s", r)
+		}
+		ipRangesStr[i] = r.String()
+	}
+
 	logger := m.logger.With(
-		"service_name", svc.Name,
-		"service_port", svc.Port,
+		"service.name", svc.Name,
+		"service.port", svc.Port,
 	)
 
 	if duration > svc.MaxAccessDuration {
 		logger.Warn("requested duration exceeds configured service max; clamping to max",
 			"requested_duration", duration,
-			"service_max", svc.MaxAccessDuration,
+			"service.max_access_duration", svc.MaxAccessDuration,
 		)
 		duration = min(duration, svc.MaxAccessDuration)
 	}
 	if duration == 0 {
 		duration = m.defaultAccessDuration
 	}
-
 	logger = logger.With("duration", duration)
 
-	for _, ipRange := range ipSet.Ranges() {
-		logger.With("client_ip_range", ipRange.String()).Debug("granting access")
-
-		if err := m.firewall.Allow(ipRange, svc.Port, duration); err != nil {
-			return fmt.Errorf("failed creating access for client IP range '%s' to service %s: %w", ipRange, svc.Name, err)
-		}
-
-		logger.With("client_ip_range", ipRange.String()).Info("granted access")
+	if err := m.firewall.Allow(ipSet, svc.Port, duration); err != nil {
+		return err
 	}
+
+	logger.Info("granted access", "ip_ranges", ipRangesStr)
 
 	return nil
 }
 
-// Setup creates a new Firewall with the given type and a Manager for it that
-// uses configured services.
+// Setup creates a new Firewall with the given type and a Manager for it.
 //
 //nolint:ireturn,nolintlint // Intentional, this is a generic function.
 func Setup(
@@ -87,7 +90,7 @@ func Setup(
 	)
 	switch ft {
 	case ftypes.FirewallMock:
-		fw = mock.New(appCtx.TimeNow, logger)
+		fw = mock.New(appCtx.TimeNow)
 	case ftypes.FirewallNFTables:
 		fw, err = nftables.New(defaultAccessDuration, logger)
 	default:

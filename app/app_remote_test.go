@@ -119,13 +119,13 @@ func TestAppRemoteIntegration(t *testing.T) {
 	// Confirm that the firewall rule was added on app1.
 	var app1fwdebug string
 	for line := range strings.Lines(app1.stderr.String()) {
-		if strings.Contains(line, "DBG granted access") {
+		if strings.Contains(line, "INF granted access") {
 			app1fwdebug = line
 			break
 		}
 	}
 	h(assert.Contains(t, app1fwdebug, "user_name=newuser"))
-	h(assert.Contains(t, app1fwdebug, "range=10.0.0.10-10.0.0.10"))
+	h(assert.Contains(t, app1fwdebug, "ip_ranges=[10.0.0.10-10.0.0.10]"))
 	h(assert.Contains(t, app1fwdebug, "port=8080"))
 	h(assert.Contains(t, app1fwdebug, "duration=1h"))
 

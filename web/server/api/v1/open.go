@@ -64,7 +64,7 @@ func (h *Handler) OpenPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = fwMgr.AllowAccess(ipSet, svc, reqData.Duration)
+	err = fwMgr.GrantAccess(ipSet, svc, reqData.Duration)
 	if err != nil {
 		_ = util.WriteJSON(w, types.NewBadRequestError(err.Error()))
 		return

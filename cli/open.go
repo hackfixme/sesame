@@ -60,7 +60,7 @@ func (c *Open) Run(appCtx *actx.Context) error {
 		)
 		if err != nil {
 			return aerrors.NewWithCause(
-				"failed setting up firewall", err, "firewall_type", appCtx.Config.Firewall.Type.V)
+				"failed setting up firewall", err, "firewall.type", appCtx.Config.Firewall.Type.V)
 		}
 
 		svc := &models.Service{Name: c.ServiceName}
@@ -68,10 +68,12 @@ func (c *Open) Run(appCtx *actx.Context) error {
 			return aerrors.NewWithCause("unknown service", err, "service.name", c.ServiceName)
 		}
 
-		err = fwMgr.AllowAccess(ipSet, svc, c.Duration)
+		err = fwMgr.GrantAccess(ipSet, svc, c.Duration)
 		if err != nil {
 			return aerrors.NewWithCause(
-				"failed granting access", err, "firewall_type", appCtx.Config.Firewall.Type.V)
+				"failed granting access", err,
+				"service.name", c.ServiceName,
+				"firewall.type", appCtx.Config.Firewall.Type.V)
 		}
 	}
 

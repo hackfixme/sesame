@@ -33,7 +33,7 @@ type Firewall interface {
 	// Init initializes the firewall (creates tables, chains, etc.)
 	Init() error
 
-	// Allow grants the given IP address range access to the port for a specific
-	// duration.
-	Allow(ipRange netipx.IPRange, destPort uint16, duration time.Duration) error
+	// Allow grants access to the destination port from a set of IP addresses for
+	// a specific amount of time.
+	Allow(ipSet *netipx.IPSet, destPort uint16, duration time.Duration) error
 }

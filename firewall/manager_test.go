@@ -18,8 +18,6 @@ import (
 func TestNewManager(t *testing.T) {
 	t.Parallel()
 
-	logger := slog.New(slog.DiscardHandler)
-
 	tests := []struct {
 		name     string
 		firewall types.Firewall
@@ -27,7 +25,7 @@ func TestNewManager(t *testing.T) {
 	}{
 		{
 			name:     "ok/valid",
-			firewall: mock.New(timeNowFn, logger),
+			firewall: mock.New(timeNowFn),
 		},
 		{
 			name:     "err/nil_firewall",
@@ -55,15 +53,15 @@ func TestNewManager(t *testing.T) {
 
 	t.Run("ok/custom_logger", func(t *testing.T) {
 		t.Parallel()
+		mockFirewall := mock.New(timeNowFn)
 		clogger := slog.New(slog.DiscardHandler)
-		mockFirewall := mock.New(timeNowFn, clogger)
 		manager, err := firewall.NewManager(mockFirewall, firewall.WithLogger(clogger))
 		require.NoError(t, err)
 		assert.NotNil(t, manager)
 	})
 }
 
-func TestManager_AllowAccess(t *testing.T) {
+func TestManager_GrantAccess(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -103,7 +101,7 @@ func TestManager_AllowAccess(t *testing.T) {
 			ipAddr:     []string{"192.168.1.100"},
 			duration:   30 * time.Minute,
 			setupError: true,
-			expErr:     "failed creating access for client IP range",
+			expErr:     "firewall error",
 		},
 	}
 
@@ -111,8 +109,7 @@ func TestManager_AllowAccess(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			logger := slog.New(slog.DiscardHandler)
-			mockFirewall := mock.New(timeNowFn, logger)
+			mockFirewall := mock.New(timeNowFn)
 
 			// For the firewall allow failure test, we need to create the manager first
 			// (without error) then set the error for the Allow operation.
@@ -129,7 +126,7 @@ func TestManager_AllowAccess(t *testing.T) {
 			require.NoError(t, err)
 
 			svc := &models.Service{Name: "web", Port: 8080, MaxAccessDuration: time.Hour}
-			err = manager.AllowAccess(ipSet, svc, tt.duration)
+			err = manager.GrantAccess(ipSet, svc, tt.duration)
 			if tt.expErr != "" {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tt.expErr)

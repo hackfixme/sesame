@@ -31,12 +31,8 @@ func TestAppOpenIntegration(t *testing.T) {
 			clients:        []string{"192.168.1.1", "10.0.0.0/8", "172.16.1.1-172.16.1.100", "2001:db8::/32"},
 			accessDuration: 30 * time.Minute,
 			expStderr: []string{
-				"granted access", "service_name=web",
-				"service_port=80", "duration=30m0s",
-				"client_ip_range=192.168.1.1-192.168.1.1",
-				"client_ip_range=10.0.0.0-10.255.255.255",
-				"client_ip_range=172.16.1.1-172.16.1.100",
-				"client_ip_range=2001:db8::-2001:db8:ffff:ffff:ffff:ffff:ffff:ffff",
+				"granted access", "service.name=web", "service.port=80", "duration=30m0s",
+				`ip_ranges="[10.0.0.0-10.255.255.255 172.16.1.1-172.16.1.100 192.168.1.1-192.168.1.1 2001:db8::-2001:db8:ffff:ffff:ffff:ffff:ffff:ffff]`,
 			},
 		},
 		{

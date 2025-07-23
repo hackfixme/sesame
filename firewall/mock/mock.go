@@ -1,7 +1,6 @@
 package mock
 
 import (
-	"log/slog"
 	"time"
 
 	"go4.org/netipx"
@@ -16,18 +15,16 @@ type Mock struct {
 	Allowed map[string]map[uint16]time.Time
 	failErr error // to simulate errors
 	timeNow func() time.Time
-	logger  *slog.Logger
 }
 
 var _ ftypes.Firewall = (*Mock)(nil)
 
 // New creates a new Mock firewall instance with the provided time function.
 // The timeNow function is used to determine current time for expiration calculations.
-func New(timeNow func() time.Time, logger *slog.Logger) *Mock {
+func New(timeNow func() time.Time) *Mock {
 	return &Mock{
 		Allowed: make(map[string]map[uint16]time.Time),
 		timeNow: timeNow,
-		logger:  logger,
 	}
 }
 
@@ -37,25 +34,23 @@ func (m *Mock) Init() error {
 	return m.failErr
 }
 
-// Allow grants access for the specified IP range to the destination port for
-// the given duration. Returns the configured failure error if one is set,
-// otherwise tracks the allowance with expiration time.
-func (m *Mock) Allow(ipRange netipx.IPRange, destPort uint16, duration time.Duration) error {
+// Allow grants access to the destination port from a set of IP addresses for a
+// specific amount of time. It returns the configured failure error if one is
+// set, otherwise tracks the allowance with expiration time.
+func (m *Mock) Allow(ipSet *netipx.IPSet, destPort uint16, duration time.Duration) error {
 	if m.failErr != nil {
 		return m.failErr
 	}
-	ipStr := ipRange.String()
-	ports, ok := m.Allowed[ipStr]
-	if !ok {
-		ports = make(map[uint16]time.Time)
-		m.Allowed[ipStr] = ports
+	ipRanges := ipSet.Ranges()
+	for _, ipRange := range ipRanges {
+		ipStr := ipRange.String()
+		ports, ok := m.Allowed[ipStr]
+		if !ok {
+			ports = make(map[uint16]time.Time)
+			m.Allowed[ipStr] = ports
+		}
+		ports[destPort] = m.timeNow().Add(duration)
 	}
-	ports[destPort] = m.timeNow().Add(duration)
-
-	m.logger.Debug("granted access",
-		"range", ipRange.String(),
-		"port", destPort,
-		"duration", duration)
 
 	return nil
 }

@@ -377,47 +377,38 @@ func (n *NFTables) Init() (err error) {
 	return nil
 }
 
-// Allow gives the specified IP address range access to the port for a specific duration.
-func (n *NFTables) Allow(ipRange netipx.IPRange, destPort uint16, duration time.Duration) error {
-	if !ipRange.IsValid() {
-		return fmt.Errorf("invalid IP address range: %s", ipRange)
-	}
-	if destPort == 0 {
-		return fmt.Errorf("invalid port: %d", destPort)
-	}
-
-	var (
-		ipRangeStart = ipRange.From().AsSlice()
-		ipRangeEnd   = ipRange.To().AsSlice()
-	)
-
+// Allow grants access to the destination port from a set of IP addresses for a
+// specific amount of time.
+func (n *NFTables) Allow(ipSet *netipx.IPSet, destPort uint16, duration time.Duration) error {
 	// Port in binary network byte order (big endian)
-	portBytes := make([]byte, 4)
+	portBytes := make([]byte, 2)
 	binary.BigEndian.PutUint16(portBytes, destPort)
 
-	keyStart := slices.Concat(ipRangeStart, portBytes)
-	keyEnd := slices.Concat(ipRangeEnd, portBytes)
+	sets := make(map[int][]gnft.SetElement)
+	for _, ipRange := range ipSet.Ranges() {
+		keyStart := slices.Concat(ipRange.From().AsSlice(), portBytes)
+		keyEnd := slices.Concat(ipRange.To().AsSlice(), portBytes)
 
-	set := n.allowed[ipRange.From().BitLen()]
-	err := n.conn.SetAddElements(set, []gnft.SetElement{
-		{
+		setEl := gnft.SetElement{
 			Key:     keyStart,
 			KeyEnd:  keyEnd,
 			Timeout: duration,
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("failed adding element to set: %w", err)
+		}
+
+		bitLen := ipRange.From().BitLen()
+		sets[bitLen] = append(sets[bitLen], setEl)
 	}
 
-	if err = n.conn.Flush(); err != nil {
+	for bitLen, setEls := range sets {
+		err := n.conn.SetAddElements(n.allowed[bitLen], setEls)
+		if err != nil {
+			return fmt.Errorf("failed adding elements to set: %w", err)
+		}
+	}
+
+	if err := n.conn.Flush(); err != nil {
 		return fmt.Errorf("failed flushing rules: %w", err)
 	}
-
-	n.logger.Debug("granted access",
-		"range", ipRange.String(),
-		"port", destPort,
-		"duration", duration)
 
 	return nil
 }
