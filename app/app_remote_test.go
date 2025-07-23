@@ -15,9 +15,10 @@ import (
 )
 
 // Test the scenario of 2 Sesame nodes, where one creates a user and invitation
-// token, and the other joins and runs the open command over the network.
-// This is a very broad integration test that tests multiple commands, the
-// remote authentication flow, and remote operations.
+// token, and the other joins and performs operations over the network. This is
+// a very broad integration test that tests multiple commands, the remote
+// authentication flow, and remote operations.
+// TODO: Split? This test covers too much functionality.
 func TestAppRemoteIntegration(t *testing.T) {
 	t.Parallel()
 
@@ -94,6 +95,13 @@ func TestAppRemoteIntegration(t *testing.T) {
 	err = app2.flushOutputs()
 	h(assert.NoError(t, err))
 
+	// Confirm that the invite token has been redeemed and cannot be reused.
+	err = app2.Run("remote", "add", "testremote2", srvAddress, token)
+	h(assert.Error(t, err))
+	var serr *aerrors.StructuredError
+	h(assert.ErrorAs(t, err, &serr))
+	h(assert.Equal(t, http.StatusUnauthorized, serr.Metadata()["status_code"]))
+
 	err = app2.Run("remote", "update", "testremote", "--new-name=testremoteupd")
 	h(assert.NoError(t, err))
 
@@ -117,24 +125,30 @@ func TestAppRemoteIntegration(t *testing.T) {
 	h(assert.NoError(t, err))
 
 	// Confirm that the firewall rule was added on app1.
-	var app1fwdebug string
-	for line := range strings.Lines(app1.stderr.String()) {
-		if strings.Contains(line, "INF granted access") {
-			app1fwdebug = line
-			break
-		}
-	}
-	h(assert.Contains(t, app1fwdebug, "user_name=newuser"))
-	h(assert.Contains(t, app1fwdebug, "ip_ranges=[10.0.0.10-10.0.0.10]"))
-	h(assert.Contains(t, app1fwdebug, "port=8080"))
-	h(assert.Contains(t, app1fwdebug, "duration=1h"))
+	assertLogContains(t, h, app1.stderr.String(), []string{
+		"INF granted access",
+		"user_name=newuser",
+		"service.name=python",
+		"service.port=8080",
+		"ip_ranges=[10.0.0.10-10.0.0.10]",
+		"duration=1h",
+	})
 
-	// Confirm that the invite token has been redeemed and cannot be reused.
-	err = app2.Run("remote", "add", "testremote2", srvAddress, token)
-	h(assert.Error(t, err))
-	var serr *aerrors.StructuredError
-	h(assert.ErrorAs(t, err, &serr))
-	h(assert.Equal(t, http.StatusUnauthorized, serr.Metadata()["status_code"]))
+	err = app2.Run("close", "--remote=testremoteupd", "python", "10.0.0.10")
+	h(assert.NoError(t, err))
+	h(assert.Equal(t, "", app2.stdout.String()))
+
+	err = app1.flushOutputs()
+	h(assert.NoError(t, err))
+
+	// Confirm that the firewall rule was removed on app1.
+	assertLogContains(t, h, app1.stderr.String(), []string{
+		"INF denied access",
+		"user_name=newuser",
+		"service.name=python",
+		"service.port=8080",
+		"ip_ranges=[10.0.0.10-10.0.0.10]",
+	})
 
 	err = app2.Run("remote", "rm", "testremoteupd")
 	h(assert.NoError(t, err))
@@ -143,4 +157,19 @@ func TestAppRemoteIntegration(t *testing.T) {
 	h(assert.NoError(t, err))
 	h(assert.Equal(t, "", app2.stdout.String()))
 	h(assert.Equal(t, "", app2.stderr.String()))
+}
+
+func assertLogContains(t *testing.T, h func(bool), out string, contains []string) {
+	t.Helper()
+	var logLine string
+	for line := range strings.Lines(out) {
+		if strings.Contains(line, contains[0]) {
+			logLine = line
+			break
+		}
+	}
+
+	for _, log := range contains[1:] {
+		h(assert.Contains(t, logLine, log))
+	}
 }

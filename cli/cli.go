@@ -16,7 +16,8 @@ import (
 type CLI struct {
 	Init    Init    `kong:"cmd,help='Create initial application artifacts.'"`
 	Invite  Invite  `kong:"cmd,help='Manage invitations for remote users.'"`
-	Open    Open    `kong:"cmd,help='Give clients access to services.'"`
+	Open    Open    `kong:"cmd,help='Grant clients access to services.'"`
+	Close   Close   `kong:"cmd,help='Deny clients access to services.'"`
 	Remote  Remote  `kong:"cmd,help='Manage remote Sesame nodes.'"`
 	Serve   Serve   `kong:"cmd,help='Start the web server.'"`
 	Service Service `kong:"cmd,help='Manage services.'"`

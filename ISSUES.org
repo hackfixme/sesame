@@ -16,7 +16,8 @@ db/models/remote.go:131:
 The =update= command should have a =--new-name= flag. Or maybe this should be a separate =remote rename= command?
 
 
-* INPROGRESS [#A] Implement close command                        :feature:cli:
+* DONE [#A] Implement close command                              :feature:cli:
+CLOSED: [2025-07-23 Wed 13:55]
 :PROPERTIES:
 :ID:       2
 :CREATED:  [2025-07-22 Tue 14:50:02]
