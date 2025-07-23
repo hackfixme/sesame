@@ -21,7 +21,7 @@ import (
 const (
 	tableName       = "sesame"
 	chainName       = "input"
-	setAllowed4Name = "allowed_clients"
+	setAllowed4Name = "allowed_clients4"
 	setAllowed6Name = "allowed_clients6"
 )
 
@@ -80,7 +80,7 @@ func New(defaultAccessDuration time.Duration, logger *slog.Logger) (*NFTables, e
 // It creates the following ruleset:
 //
 //	table inet sesame {
-//	    set allowed_clients {
+//	    set allowed_clients4 {
 //	        type ipv4_addr . inet_service
 //	        flags interval,timeout
 //	        timeout 5m
@@ -96,7 +96,7 @@ func New(defaultAccessDuration time.Duration, logger *slog.Logger) (*NFTables, e
 //	        type filter hook input priority filter; policy drop;
 //	        meta mark 0x00000001 accept
 //	        ct state established,related accept
-//	        ip saddr . tcp dport @allowed_clients accept
+//	        ip saddr . tcp dport @allowed_clients4 accept
 //	        ip6 saddr . tcp dport @allowed_clients6 accept
 //	    }
 //	}
@@ -129,7 +129,7 @@ func (n *NFTables) Init() (err error) {
 
 	// IPv4 and IPv6 sets, whose elements are concatenations of the source IP
 	// address and the destination port.
-	// set allowed_clients {
+	// set allowed_clients4 {
 	//     type ipv4_addr . inet_service
 	//     flags interval,timeout
 	//     timeout 5m
@@ -266,7 +266,7 @@ func (n *NFTables) Init() (err error) {
 	})
 
 	// Accept packets from allowed IPv4 clients
-	// ip saddr . tcp dport @allowed_clients accept
+	// ip saddr . tcp dport @allowed_clients4 accept
 	//nolint:dupl // This rule is very similar to the IPv6 one, but not the same.
 	n.conn.AddRule(&gnft.Rule{
 		Table: n.table,
