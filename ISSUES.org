@@ -198,3 +198,48 @@ Currently there's no way for the user to see the firewall rules managed by Sesam
 Add a top-level =list= or =show= command to display the current rules as they exist in the firewall. This should be a table that shows data using the same terminology and concepts as Sesame, not simply a wrapper around the firewall output.
 
 So at the very least it should show the service name, port, allowed clients, and expiration time.
+
+
+* Add E2E tests                                                    :task:test:
+:PROPERTIES:
+:ID:       10
+:CREATED:  [2025-07-23 Wed 14:03:31]
+:END:
+
+Sesame currently has decent test coverage (62.38%), mostly due to the single =AppRemoteIntegration= test.
+
+However, even that integration test does not represent real-world usage, since it mocks quite a few things, most notably the firewall implementation itself. Meaning there are currently no tests for nftables. I have tested this manually a few weeks ago, so I'm relatively confident it still works, but there have been many changes since then which could've broken things.
+
+The goal of this task is to add end-to-end tests in order to get actual real-world assurance that the application works as expected.
+
+
+** Background
+
+There is currently a decent set of helpers for running real-world tests:
+
+- The [[file:test/bin/qemu.sh][qemu.sh]] script that simplifies running a VM with QEMU.
+
+- A [[file:justfile::157][justfile recipe]] that downloads a Debian cloud image, creates a base backing image, and boots it with cloud-init, which installs some prerequisite applications.
+
+- Other justfile recipes to copy files and SSH into the VM automatically.
+
+- The VM is setup to allow passwordless login via the SSH pubkey.
+
+All of this makes running manual tests relatively simple, and the system could potentially be reused for running fully automated E2E tests as well.
+
+
+** Suggested implementation
+
+I think it makes sense to keep the VM testing infrastructure that already exists.
+
+It might be worth checking whether nftables could be tested within containers, in which case [[https://github.com/testcontainers/testcontainers-go][testcontainers]] could simplify some of this, but a) I'm extremely wary of changing nftables rules inside a container, since it could impact Docker itself or my host machine, and b) I'm not a fan of testcontainers, since I've found them to be difficult to run and unreliable in the past. A VM offers better isolation, while I can work on making the bespoke process reliable.
+
+Other options worth looking into are lightweight VMs, micro VMs, etc. Things like Firecracker, and similar. That is a rapidly changing landscape, unlike QEMU, and I'm not confident that the tooling around it would support what I get with QEMU. For example, the ability to setup the VM with cloud-init, passwordless logins, backing disk images, etc.
+
+In any case, once the testing infrastructure is decided, there should be one or more E2E tests that:
+
+- Use the CLI of the compiled Sesame binary.
+
+- Test both happy and error paths.
+
+The focus should primarily be on testing nftables, since that is not possible to test in unit or integration tests.
