@@ -137,6 +137,7 @@ func (h *Handler) JoinPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 8. Encrypt the JSON response data with the ECDH shared key.
+	// TODO: Should this key be derived?
 	var sharedKeyArr [32]byte
 	copy(sharedKeyArr[:], sharedKey)
 	dataEnc, err := crypto.EncryptSymInMemory(dataJSON, &sharedKeyArr)

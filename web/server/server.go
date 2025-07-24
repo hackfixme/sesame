@@ -23,8 +23,9 @@ type Server struct {
 	logger *slog.Logger
 }
 
-// New returns a new web Server instance that will listen on addr. If tlsCert
-// and tlsPrivKey are provided, ListenAndServe will start an HTTPS server.
+// New returns a new web Server instance that will listen on addr for both TCP
+// and TLS connections. If tlsCert is provided, it configures TLS and requires
+// clients using TLS to authenticate with certificates signed by tlsCert.
 func New(appCtx *actx.Context, addr string, tlsCert *tls.Certificate) (*Server, error) {
 	var tlsCfg *tls.Config
 	if tlsCert != nil {

@@ -67,6 +67,7 @@ func (c *Client) Auth(ctx context.Context, token string) (ctypes.AuthResponseDat
 	}
 
 	// 5. Decrypt the response payload with the shared key.
+	// TODO: Should this key be derived?
 	var sharedKeyArr [32]byte
 	copy(sharedKeyArr[:], sharedKey)
 	respBodyJSON, err := crypto.DecryptSymInMemory(respBodyDec, &sharedKeyArr)
