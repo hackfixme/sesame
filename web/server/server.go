@@ -34,7 +34,7 @@ func New(appCtx *actx.Context, addr string, tlsCert *tls.Certificate) (*Server, 
 		tlsCfg.Certificates = []tls.Certificate{*tlsCert}
 		tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
 
-		caCert, err := crypto.ExtractCACert(*tlsCert)
+		caCert, err := crypto.ExtractCert(*tlsCert, true)
 		if err != nil {
 			return nil, fmt.Errorf("failed extracting CA certificate: %w", err)
 		}

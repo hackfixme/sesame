@@ -95,7 +95,7 @@ func NewTLSCert(
 	var certDER []byte
 	if parent != nil {
 		var parentCert *x509.Certificate
-		parentCert, err = ExtractCACert(*parent)
+		parentCert, err = ExtractCert(*parent, true)
 		if err != nil {
 			return tlsCert, fmt.Errorf("failed to extract CA certificate from parent: %w", err)
 		}
@@ -197,13 +197,27 @@ func DeserializeTLSCert(data []byte) (tls.Certificate, error) {
 	return cert, nil
 }
 
-// ExtractCACert finds and returns the first CA certificate in the certificate
-// chain that clients can use to verify server certificates, or for signing purposes.
-func ExtractCACert(cert tls.Certificate) (*x509.Certificate, error) {
+// ExtractCert finds and returns either a CA certificate or the leaf certificate
+// from the certificate chain based on the ca parameter.
+func ExtractCert(cert tls.Certificate, ca bool) (*x509.Certificate, error) {
 	if len(cert.Certificate) == 0 {
 		return nil, errors.New("no certificate data found")
 	}
 
+	if !ca {
+		// Return leaf certificate (end-entity certificate)
+		if cert.Leaf != nil {
+			return cert.Leaf, nil
+		}
+		// First certificate in chain is typically the leaf
+		x509Cert, err := x509.ParseCertificate(cert.Certificate[0])
+		if err != nil {
+			return nil, fmt.Errorf("failed parsing first certificate in chain: %w", err)
+		}
+		return x509Cert, nil
+	}
+
+	// Search for CA certificate
 	if cert.Leaf != nil && cert.Leaf.IsCA {
 		return cert.Leaf, nil
 	}
