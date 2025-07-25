@@ -108,6 +108,9 @@ func InviteTokenAuth(appCtx *actx.Context) Authenticator {
 		}
 
 		req.SetUser(inv.User)
+		if r, ok := req.(interface{ SetSiteID(string) }); ok {
+			r.SetSiteID(inv.SiteID)
+		}
 
 		// Store the shared key in the context, since it has to be used for
 		// encrypting the response.

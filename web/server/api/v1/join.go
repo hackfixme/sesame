@@ -2,10 +2,12 @@ package api
 
 import (
 	"context"
+	"crypto/x509"
 	"net/http"
 	"time"
 
 	"go.hackfix.me/sesame/crypto"
+	"go.hackfix.me/sesame/db/models"
 	"go.hackfix.me/sesame/web/server/types"
 )
 
@@ -22,6 +24,26 @@ func (h *Handler) Join(_ context.Context, req *types.JoinRequest) (*types.JoinRe
 	clientTLSCert, err := crypto.NewTLSCert(
 		req.User.Name, []string{h.tlsCACert.DNSNames[0]}, timeNow, timeNow.Add(24*time.Hour), &h.tlsServerCert,
 	)
+	if err != nil {
+		return nil, types.NewError(http.StatusInternalServerError, err.Error())
+	}
+
+	// Store a record of the client certificate.
+	var clientTLSx509Cert *x509.Certificate
+	clientTLSx509Cert, err = crypto.ExtractLeafCert(clientTLSCert)
+	if err != nil {
+		return nil, types.NewError(http.StatusInternalServerError, err.Error())
+	}
+
+	var cc *models.ClientCertificate
+	cc, err = models.NewClientCertificate(req.User, req.SiteID,
+		h.appCtx.Config.Client.TLSCertRenewalTokenExpiration.V, clientTLSx509Cert)
+	if err != nil {
+		return nil, types.NewError(http.StatusInternalServerError, err.Error())
+	}
+
+	//nolint:contextcheck // This context is inherited from the global context.
+	err = cc.Save(h.appCtx.DB.NewContext(), h.appCtx.DB, false)
 	if err != nil {
 		return nil, types.NewError(http.StatusInternalServerError, err.Error())
 	}

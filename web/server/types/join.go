@@ -11,6 +11,12 @@ import (
 // JoinRequest represents a request to join the Sesame service.
 type JoinRequest struct {
 	BaseRequest `json:"-"`
+	SiteID      string `json:"site_id"`
+}
+
+// SetSiteID sets the ID of the remote Sesame site.
+func (r *JoinRequest) SetSiteID(id string) {
+	r.SiteID = id
 }
 
 // Validate checks that the request is valid and ready for processing.
