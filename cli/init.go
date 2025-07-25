@@ -31,9 +31,10 @@ func (c *Init) Run(appCtx *actx.Context) error {
 		}
 	}
 
+	cfg := appCtx.Config
 	if c.FirewallType != "" { //nolint:nestif // Meh, it's fine.
-		if appCtx.Config.Firewall.Type.Valid {
-			appCtx.Logger.Warn("A firewall is already initialized, skipping", "type", appCtx.Config.Firewall.Type.V)
+		if cfg.Firewall.Type.Valid {
+			appCtx.Logger.Warn("A firewall is already initialized, skipping", "type", cfg.Firewall.Type.V)
 		} else {
 			fw, _, err := firewall.Setup(appCtx, c.FirewallType, c.FirewallDefaultAccessDuration, appCtx.Logger)
 			if err != nil {
@@ -44,14 +45,16 @@ func (c *Init) Run(appCtx *actx.Context) error {
 				return err
 			}
 
-			appCtx.Config.Firewall.Type.V = c.FirewallType
-			appCtx.Config.Firewall.Type.Valid = true
-			appCtx.Config.Firewall.DefaultAccessDuration.V = c.FirewallDefaultAccessDuration
-			appCtx.Config.Firewall.DefaultAccessDuration.Valid = true
+			cfg.Firewall.Type.V = c.FirewallType
+			cfg.Firewall.Type.Valid = true
+			cfg.Firewall.DefaultAccessDuration.V = c.FirewallDefaultAccessDuration
+			cfg.Firewall.DefaultAccessDuration.Valid = true
 		}
 	}
 
-	if err := appCtx.Config.Save(); err != nil {
+	cfg.SetDefaults()
+
+	if err := cfg.Save(); err != nil {
 		return aerrors.NewWithCause("failed saving configuration", err)
 	}
 

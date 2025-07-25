@@ -28,7 +28,7 @@ There's currently an =open= command, but not its =close= counterpart to remove a
 It should support both removing access to a single IP address or range, or to the entire service.
 
 
-* Implement TLS certificate lifecycle management            :feature:security:
+* INPROGRESS Implement TLS certificate lifecycle management :feature:security:
 :PROPERTIES:
 :ID:       3
 :CREATED:  [2025-07-22 Tue 13:58]
