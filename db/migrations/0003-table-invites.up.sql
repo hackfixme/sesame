@@ -6,7 +6,9 @@ CREATE TABLE invites (
   expires_at   TIMESTAMP     NOT NULL,
   redeemed_at  TIMESTAMP,
   user_id      INTEGER       NOT NULL,
+  site_id      VARCHAR(32)   NOT NULL,
   private_key  BLOB          NOT NULL,
   nonce        BLOB          UNIQUE NOT NULL,
-  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE(user_id, site_id)
 );

@@ -20,6 +20,7 @@ type Invite struct {
 		Name string `arg:"" help:"The name of the user to invite."`
 		//nolint:lll // Long struct tags are unavoidable.
 		Expiration time.Time `default:"1h" short:"e" type:"expiration" help:"Invite expiration as a time duration from now (e.g. 5m, 1h, 3d, 1w) or a future timestamp in RFC 3339 format (e.g. %s)."`
+		SiteID     string    `short:"s" help:"A unique identifier for this remote site. E.g.: home, work. Default: random"`
 	} `cmd:"" help:"Create a new invitation token for an existing user to access this Sesame node remotely."`
 	List struct {
 		All bool `short:"a" help:"Also include expired invites."`
@@ -31,6 +32,7 @@ type Invite struct {
 		ID string `arg:"" help:"Unique invite ID. A short prefix can be specified as long as it is unique."`
 		//nolint:lll // Long struct tags are unavoidable.
 		Expiration time.Time `short:"e" type:"expiration" help:"Invite expiration as a time duration from now (e.g. 5m, 1h, 3d, 1w) or a future timestamp in RFC 3339 format (e.g. %s)."`
+		SiteID     string    `short:"s" help:"A unique identifier for this remote site. E.g.: home, work."`
 	} `cmd:"" help:"Update an invite."`
 }
 
@@ -46,7 +48,7 @@ func (c *Invite) Run(kctx *kong.Context, appCtx *actx.Context) error {
 		if err := user.Load(dbCtx, appCtx.DB); err != nil {
 			return aerrors.NewWithCause("failed loading user", err, "name", c.User.Name)
 		}
-		inv, err := models.NewInvite(user, c.User.Expiration, appCtx.UUIDGen())
+		inv, err := models.NewInvite(user, c.User.Expiration, c.User.SiteID, appCtx.UUIDGen)
 		if err != nil {
 			return aerrors.NewWithCause("failed creating invite", err, "user_name", c.User.Name)
 		}
@@ -94,13 +96,13 @@ Expires At: %s
 				timeLeftStr := xtime.FormatDuration(timeLeft, time.Second)
 				expFmt := fmt.Sprintf("%s (in %s)",
 					inv.ExpiresAt.Local().Format(time.DateTime), timeLeftStr)
-				active = append(active, []string{inv.UUID, inv.User.Name, token, expFmt})
+				active = append(active, []string{inv.UUID, inv.User.Name, inv.SiteID, token, expFmt})
 			} else {
 				timeLeftStr := xtime.FormatDuration(-timeLeft, time.Second)
 				expFmt := fmt.Sprintf("%s (%s ago)",
 					inv.ExpiresAt.Local().Format(time.DateTime), timeLeftStr)
 				// In reverse order since it's more useful to see the ones that expired recently first.
-				expired = append([][]string{{inv.UUID, inv.User.Name, token, expFmt}}, expired...)
+				expired = append([][]string{{inv.UUID, inv.User.Name, inv.SiteID, token, expFmt}}, expired...)
 			}
 		}
 
@@ -114,7 +116,7 @@ Expires At: %s
 		}
 
 		if len(data) > 0 {
-			header := []string{"ID", "User", "Token", "Expires At"}
+			header := []string{"ID", "User", "Site ID", "Token", "Expires At"}
 			err = renderTable(header, data, appCtx.Stdout)
 			if err != nil {
 				return aerrors.NewWithCause("failed rendering table", err)
@@ -131,7 +133,7 @@ Expires At: %s
 		}
 
 	case "invite update <id>":
-		inv := &models.Invite{UUID: c.Update.ID, ExpiresAt: c.Update.Expiration}
+		inv := &models.Invite{UUID: c.Update.ID, ExpiresAt: c.Update.Expiration, SiteID: c.Update.SiteID}
 		if err := inv.Save(dbCtx, appCtx.DB, true); err != nil {
 			return err
 		}

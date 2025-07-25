@@ -27,14 +27,17 @@ type Invite struct {
 	ExpiresAt  time.Time
 	RedeemedAt sql.Null[time.Time]
 	User       *User
-	Nonce      []byte
+	// A unique identifier of the remote site this invite will be used in.
+	// It's essentially the reverse of the remote name used by the client.
+	SiteID string
+	Nonce  []byte
 
 	privKey *ecdh.PrivateKey
 }
 
 // NewInvite creates a new invitation for a remote user, which contains a unique
 // token that must be supplied when authenticating to the server.
-func NewInvite(user *User, expiration time.Time, uuid string) (*Invite, error) {
+func NewInvite(user *User, expiration time.Time, siteID string, uuidGen func() string) (*Invite, error) {
 	privKey, err := ecdh.X25519().GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, fmt.Errorf("failed generating X25519 key: %w", err)
@@ -45,10 +48,15 @@ func NewInvite(user *User, expiration time.Time, uuid string) (*Invite, error) {
 		return nil, fmt.Errorf("failed generating nonce: %w", err)
 	}
 
+	if siteID == "" {
+		siteID = uuidGen()
+	}
+
 	return &Invite{
-		UUID:      uuid,
+		UUID:      uuidGen(),
 		ExpiresAt: expiration,
 		User:      user,
+		SiteID:    siteID,
 		Nonce:     nonce,
 		privKey:   privKey,
 	}, nil
@@ -67,7 +75,7 @@ func (inv *Invite) Save(ctx context.Context, d types.Querier, update bool) error
 	)
 
 	timeNow := d.TimeNow().UTC()
-	if update {
+	if update { //nolint:nestif // It's fine.
 		var (
 			filter *types.Filter
 			err    error
@@ -86,6 +94,10 @@ func (inv *Invite) Save(ctx context.Context, d types.Querier, update bool) error
 			additional += ", redeemed_at = ?"
 			args = append(args, inv.RedeemedAt.V)
 		}
+		if inv.SiteID != "" {
+			additional += ", site_id = ?"
+			args = append(args, inv.SiteID)
+		}
 		args = append(args, filter.Args...)
 		stmt = fmt.Sprintf(`UPDATE invites
 			SET updated_at = ?%s
@@ -93,9 +105,12 @@ func (inv *Invite) Save(ctx context.Context, d types.Querier, update bool) error
 		op = fmt.Sprintf("updating invite with %s", filterStr)
 	} else {
 		stmt = `INSERT INTO invites (
-				id, uuid, created_at, updated_at, expires_at, user_id, private_key, nonce)
-				VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)`
-		args = []any{inv.UUID, timeNow, timeNow, inv.ExpiresAt, inv.User.ID, inv.privKey.Bytes(), inv.Nonce}
+				id, uuid, created_at, updated_at, expires_at, user_id, site_id, private_key, nonce)
+				VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?)`
+		args = []any{
+			inv.UUID, timeNow, timeNow, inv.ExpiresAt, inv.User.ID, inv.SiteID,
+			inv.privKey.Bytes(), inv.Nonce,
+		}
 		op = "saving new invite"
 	}
 
@@ -254,7 +269,7 @@ func (inv *Invite) createFilter(ctx context.Context, d types.Querier, limit int)
 func Invites(ctx context.Context, d types.Querier, filter *types.Filter) (invites []*Invite, rerr error) {
 	queryFmt := `SELECT
 			inv.id, inv.uuid, inv.created_at, inv.updated_at, inv.expires_at, inv.redeemed_at,
-			inv.user_id, inv.private_key, inv.nonce
+			inv.user_id, inv.site_id, inv.private_key, inv.nonce
 		FROM invites inv
 		%s ORDER BY inv.expires_at ASC %s`
 
@@ -291,7 +306,7 @@ func Invites(ctx context.Context, d types.Querier, filter *types.Filter) (invite
 		)
 		err = rows.Scan(
 			&inv.ID, &inv.UUID, &inv.CreatedAt, &inv.UpdatedAt, &inv.ExpiresAt, &inv.RedeemedAt,
-			&userID, &privKeyBytes, &inv.Nonce)
+			&userID, &inv.SiteID, &privKeyBytes, &inv.Nonce)
 		if err != nil {
 			return nil, types.ScanError{ModelName: "invite", Err: err}
 		}
