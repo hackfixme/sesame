@@ -14,6 +14,7 @@ import (
 	"github.com/mr-tron/base58"
 	"github.com/nrednav/cuid2"
 
+	aerrors "go.hackfix.me/sesame/app/errors"
 	"go.hackfix.me/sesame/crypto"
 	"go.hackfix.me/sesame/db/types"
 )
@@ -367,4 +368,47 @@ func Invites(ctx context.Context, d types.Querier, filter *types.Filter) (invite
 	}
 
 	return invites, nil
+}
+
+// InvitesByStatus returns invites filtered by their status, ordered by Active
+// -> Redeemed -> Expired, and ordered within each status by the most useful
+// criteria:
+// - Active: soonest expiration first (most urgent)
+// - Redeemed: most recently redeemed first (latest activity)
+// - Expired: most recently expired first (latest activity)
+// TODO: Optimize this to use a single query with CTEs.
+func InvitesByStatus(
+	ctx context.Context, d types.Querier, statusFilter map[InviteStatus]bool,
+	timeNow time.Time,
+) ([]*Invite, error) {
+	invitesAll := make([]*Invite, 0)
+
+	if statusFilter[InviteStatusActive] {
+		filter := types.NewFilter("inv.expires_at > ? AND inv.redeemed_at IS NULL", []any{timeNow})
+		invites, err := Invites(ctx, d, filter, "inv.expires_at ASC")
+		if err != nil {
+			return nil, aerrors.NewWithCause("failed querying active invites", err)
+		}
+		invitesAll = append(invitesAll, invites...)
+	}
+
+	if statusFilter[InviteStatusRedeemed] {
+		filter := types.NewFilter("inv.redeemed_at IS NOT NULL", nil)
+		invites, err := Invites(ctx, d, filter, "inv.redeemed_at DESC")
+		if err != nil {
+			return nil, aerrors.NewWithCause("failed querying redeemed invites", err)
+		}
+		invitesAll = append(invitesAll, invites...)
+	}
+
+	if statusFilter[InviteStatusExpired] {
+		filter := types.NewFilter("inv.expires_at <= ? AND inv.redeemed_at IS NULL", []any{timeNow})
+		invites, err := Invites(ctx, d, filter, "inv.expires_at DESC")
+		if err != nil {
+			return nil, aerrors.NewWithCause("failed querying expired invites", err)
+		}
+		invitesAll = append(invitesAll, invites...)
+	}
+
+	return invitesAll, nil
 }
