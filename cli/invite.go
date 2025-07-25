@@ -30,7 +30,7 @@ type Invite struct {
 	Update struct {
 		ID string `arg:"" help:"Unique invite ID. A short prefix can be specified as long as it is unique."`
 		//nolint:lll // Long struct tags are unavoidable.
-		Expiration time.Time `short:"e" type:"expiration" required:"" help:"Invite expiration as a time duration from now (e.g. 5m, 1h, 3d, 1w) or a future timestamp in RFC 3339 format (e.g. %s)."`
+		Expiration time.Time `short:"e" type:"expiration" help:"Invite expiration as a time duration from now (e.g. 5m, 1h, 3d, 1w) or a future timestamp in RFC 3339 format (e.g. %s)."`
 	} `cmd:"" help:"Update an invite."`
 }
 

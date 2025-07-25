@@ -76,17 +76,20 @@ func (inv *Invite) Save(ctx context.Context, d types.Querier, update bool) error
 		if err != nil {
 			return fmt.Errorf("failed creating query filter: %w", err)
 		}
-		args = []any{timeNow, inv.ExpiresAt}
-		var redeemed string
+		args = []any{timeNow}
+		var additional string
+		if !inv.ExpiresAt.IsZero() {
+			additional += ", expires_at = ?"
+			args = append(args, inv.ExpiresAt)
+		}
 		if inv.IsRedeemed() {
-			redeemed = ", redeemed_at = ?"
+			additional += ", redeemed_at = ?"
 			args = append(args, inv.RedeemedAt.V)
 		}
 		args = append(args, filter.Args...)
 		stmt = fmt.Sprintf(`UPDATE invites
-			SET updated_at = ?,
-				expires_at = ?%s
-			WHERE %s`, redeemed, filter.Where)
+			SET updated_at = ?%s
+			WHERE %s`, additional, filter.Where)
 		op = fmt.Sprintf("updating invite with %s", filterStr)
 	} else {
 		stmt = `INSERT INTO invites (
