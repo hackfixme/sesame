@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/mr-tron/base58"
@@ -16,6 +17,26 @@ import (
 	"go.hackfix.me/sesame/crypto"
 	"go.hackfix.me/sesame/db/types"
 )
+
+// InviteStatus is a computed status of the invite based on its ExpiresAt and
+// RedeemedAt fields.
+type InviteStatus string
+
+// Valid invite status values.
+const (
+	// InviteStatusActive represents an invite that hasn't yet expired nor been redeemed.
+	InviteStatusActive InviteStatus = "active"
+	// InviteStatusExpired represents an invite that has expired without being redeemed.
+	InviteStatusExpired InviteStatus = "expired"
+	// InviteStatusRedeemed represents an invite that was redeemed before it expired.
+	InviteStatusRedeemed InviteStatus = "redeemed"
+)
+
+// Title returns the status text in title case.
+func (s InviteStatus) Title() string {
+	// strings.Title is deprecated, and I don't want to add another dependency for this
+	return fmt.Sprintf("%s%s", strings.ToUpper(string(s[0])), s[1:])
+}
 
 // Invite is a single-use claim that is created by the server for a specific
 // user that allows remote management of a Sesame node.
@@ -225,6 +246,17 @@ func (inv *Invite) Token() (string, error) {
 // PrivateKey returns the X25519 private key.
 func (inv *Invite) PrivateKey() *ecdh.PrivateKey {
 	return inv.privKey
+}
+
+// Status returns the current status of the invite based on its field values.
+func (inv *Invite) Status(now time.Time) InviteStatus {
+	if inv.RedeemedAt.Valid {
+		return InviteStatusRedeemed
+	}
+	if now.After(inv.ExpiresAt) {
+		return InviteStatusExpired
+	}
+	return InviteStatusActive
 }
 
 func (inv *Invite) createFilter(ctx context.Context, d types.Querier, limit int) (*types.Filter, string, error) {
