@@ -92,12 +92,12 @@ Expires At: %s
 
 			if timeLeft > 0 {
 				timeLeftStr := xtime.FormatDuration(timeLeft, time.Second)
-				expFmt := fmt.Sprintf("%s (%s)",
+				expFmt := fmt.Sprintf("%s (in %s)",
 					inv.ExpiresAt.Local().Format(time.DateTime), timeLeftStr)
 				active = append(active, []string{inv.UUID, inv.User.Name, token, expFmt})
 			} else {
 				timeLeftStr := xtime.FormatDuration(-timeLeft, time.Second)
-				expFmt := fmt.Sprintf("%s (expired %s ago)",
+				expFmt := fmt.Sprintf("%s (%s ago)",
 					inv.ExpiresAt.Local().Format(time.DateTime), timeLeftStr)
 				// In reverse order since it's more useful to see the ones that expired recently first.
 				expired = append([][]string{{inv.UUID, inv.User.Name, token, expFmt}}, expired...)
