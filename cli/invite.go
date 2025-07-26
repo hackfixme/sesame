@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"slices"
 	"time"
 
 	"github.com/alecthomas/kong"
@@ -10,7 +9,6 @@ import (
 	actx "go.hackfix.me/sesame/app/context"
 	aerrors "go.hackfix.me/sesame/app/errors"
 	"go.hackfix.me/sesame/db/models"
-	"go.hackfix.me/sesame/db/types"
 	"go.hackfix.me/sesame/xtime"
 )
 
@@ -23,7 +21,9 @@ type Invite struct {
 		SiteID     string    `short:"s" help:"A unique identifier for this remote site. E.g.: home, work. Default: random"`
 	} `cmd:"" help:"Create a new invitation token for an existing user to access this Sesame node remotely."`
 	List struct {
-		All bool `short:"a" help:"Also include expired invites."`
+		//nolint:lll // Long struct tags are unavoidable.
+		Status []string `short:"s" enum:"all,active,expired,redeemed" help:"Show invites with a specific status. Valid values: ${enum} \n Multiple values can be specified separated by comma, or 'all' to show all invites."`
+		Token  bool     `short:"t" help:"Show the complete invitation token."`
 	} `cmd:"" aliases:"ls" help:"List invites."`
 	Remove struct {
 		ID []string `arg:"" help:"Unique invite IDs. A short prefix can be specified as long as it is unique."`
@@ -37,8 +37,6 @@ type Invite struct {
 }
 
 // Run the invite command.
-//
-//nolint:gocognit,funlen // A bit over the 30 max complexity, but it's fine.
 func (c *Invite) Run(kctx *kong.Context, appCtx *actx.Context) error {
 	dbCtx := appCtx.DB.NewContext()
 
@@ -72,52 +70,23 @@ Expires At: %s
 		}
 
 	case "invite list":
-		timeNow := appCtx.TimeNow().UTC()
-		var filter *types.Filter
-		if !c.List.All {
-			filter = types.NewFilter("inv.expires_at > ?", []any{timeNow})
-		}
-		invites, err := models.Invites(dbCtx, appCtx.DB, filter, "inv.expires_at ASC")
+		var (
+			statusFilter = statusFlagToFilter(c.List.Status)
+			timeNow      = appCtx.TimeNow().UTC()
+		)
+
+		invites, err := models.InvitesByStatus(dbCtx, appCtx.DB, statusFilter, timeNow)
 		if err != nil {
-			return aerrors.NewWithCause("failed listing invites", err)
+			return err
 		}
 
-		expired, active := [][]string{}, [][]string{}
-		for _, inv := range invites {
-			timeLeft := inv.ExpiresAt.Sub(timeNow)
-
-			var token string
-			token, err = inv.Token()
-			if err != nil {
-				return aerrors.NewWithCause("failed generating invitation token", err)
-			}
-
-			if timeLeft > 0 {
-				timeLeftStr := xtime.FormatDuration(timeLeft, time.Second)
-				expFmt := fmt.Sprintf("%s (in %s)",
-					inv.ExpiresAt.Local().Format(time.DateTime), timeLeftStr)
-				active = append(active, []string{inv.UUID, inv.User.Name, inv.SiteID, token, expFmt})
-			} else {
-				timeLeftStr := xtime.FormatDuration(-timeLeft, time.Second)
-				expFmt := fmt.Sprintf("%s (%s ago)",
-					inv.ExpiresAt.Local().Format(time.DateTime), timeLeftStr)
-				// In reverse order since it's more useful to see the ones that expired recently first.
-				expired = append([][]string{{inv.UUID, inv.User.Name, inv.SiteID, token, expFmt}}, expired...)
-			}
+		tableHeader, tableData, tableErr := invitesTable(invites, c.List.Token, timeNow)
+		if tableErr != nil {
+			return tableErr
 		}
 
-		data := active
-		if len(expired) > 0 {
-			if len(data) > 0 {
-				data = slices.Concat(data, [][]string{{""}}, expired)
-			} else {
-				data = expired
-			}
-		}
-
-		if len(data) > 0 {
-			header := []string{"ID", "User", "Site ID", "Token", "Expires At"}
-			err = renderTable(header, data, appCtx.Stdout)
+		if len(tableData) > 0 {
+			err = renderTable(tableHeader, tableData, appCtx.Stdout)
 			if err != nil {
 				return aerrors.NewWithCause("failed rendering table", err)
 			}
@@ -140,4 +109,79 @@ Expires At: %s
 	}
 
 	return nil
+}
+
+func statusFlagToFilter(status []string) map[models.InviteStatus]bool {
+	filter := make(map[models.InviteStatus]bool)
+
+	if len(status) == 0 {
+		filter[models.InviteStatusActive] = true
+		return filter
+	}
+
+	for _, s := range status {
+		switch s {
+		case "all":
+			return map[models.InviteStatus]bool{
+				models.InviteStatusActive:   true,
+				models.InviteStatusRedeemed: true,
+				models.InviteStatusExpired:  true,
+			}
+		case "active":
+			filter[models.InviteStatusActive] = true
+		case "redeemed":
+			filter[models.InviteStatusRedeemed] = true
+		case "expired":
+			filter[models.InviteStatusExpired] = true
+		}
+	}
+
+	return filter
+}
+
+func invitesTable(invites []*models.Invite, tokenFull bool, timeNow time.Time) ([]string, [][]string, error) {
+	var (
+		header = []string{"ID", "User", "Site ID", "Status", "Expiration", "Redeemed At", "Token"}
+		data   = make([][]string, len(invites))
+	)
+
+	for i, inv := range invites {
+		token, err := inv.Token()
+		if err != nil {
+			return nil, nil, aerrors.NewWithCause("failed generating invitation token", err)
+		}
+
+		if !tokenFull {
+			token = fmt.Sprintf("%s...", token[:16])
+		}
+
+		var (
+			status      = inv.Status(timeNow)
+			statusTitle = status.Title()
+			expFmt      = inv.ExpiresAt.Local().Format(time.DateTime)
+		)
+		switch status {
+		case models.InviteStatusActive:
+			expIn := xtime.FormatDuration(inv.ExpiresAt.Sub(timeNow), time.Second)
+			expFmt = fmt.Sprintf("%s (in %s)", expFmt, expIn)
+			data[i] = []string{
+				inv.UUID, inv.User.Name, inv.SiteID, statusTitle, expFmt, "-", token,
+			}
+		case models.InviteStatusRedeemed:
+			redAgo := xtime.FormatDuration(-inv.RedeemedAt.V.Sub(timeNow), time.Second)
+			redFmt := fmt.Sprintf("%s (%s ago)",
+				inv.RedeemedAt.V.Local().Format(time.DateTime), redAgo)
+			data[i] = []string{
+				inv.UUID, inv.User.Name, inv.SiteID, statusTitle, expFmt, redFmt, token,
+			}
+		case models.InviteStatusExpired:
+			expAgo := xtime.FormatDuration(-inv.ExpiresAt.Sub(timeNow), time.Second)
+			expFmt = fmt.Sprintf("%s (%s ago)", expFmt, expAgo)
+			data[i] = []string{
+				inv.UUID, inv.User.Name, inv.SiteID, statusTitle, expFmt, "-", token,
+			}
+		}
+	}
+
+	return header, data, nil
 }
