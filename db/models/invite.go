@@ -177,7 +177,7 @@ func (inv *Invite) Load(ctx context.Context, d types.Querier) error {
 		filter = filter.And(types.NewFilter("redeemed_at = ?", []any{inv.RedeemedAt.V}))
 	}
 
-	invites, err := Invites(ctx, d, filter)
+	invites, err := Invites(ctx, d, filter, "")
 	if err != nil {
 		return err
 	}
@@ -298,13 +298,15 @@ func (inv *Invite) createFilter(ctx context.Context, d types.Querier, limit int)
 }
 
 // Invites returns one or more invites from the database. An optional filter can
-// be passed to limit the results.
-func Invites(ctx context.Context, d types.Querier, filter *types.Filter) (invites []*Invite, rerr error) {
+// be passed to limit the results, as well as an ORDER BY clause.
+func Invites(
+	ctx context.Context, d types.Querier, filter *types.Filter, orderBy string,
+) (invites []*Invite, rerr error) {
 	queryFmt := `SELECT
 			inv.id, inv.uuid, inv.created_at, inv.updated_at, inv.expires_at, inv.redeemed_at,
 			inv.user_id, inv.site_id, inv.private_key, inv.nonce
 		FROM invites inv
-		%s ORDER BY inv.expires_at ASC %s`
+		%s %s %s`
 
 	where := "1=1"
 	var limit string
@@ -317,7 +319,11 @@ func Invites(ctx context.Context, d types.Querier, filter *types.Filter) (invite
 		}
 	}
 
-	query := fmt.Sprintf(queryFmt, fmt.Sprintf("WHERE %s", where), limit)
+	if orderBy != "" {
+		orderBy = fmt.Sprintf("ORDER BY %s", orderBy)
+	}
+
+	query := fmt.Sprintf(queryFmt, fmt.Sprintf("WHERE %s", where), orderBy, limit)
 
 	rows, err := d.QueryContext(ctx, query, args...)
 	if err != nil {

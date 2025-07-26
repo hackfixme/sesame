@@ -77,7 +77,7 @@ Expires At: %s
 		if !c.List.All {
 			filter = types.NewFilter("inv.expires_at > ?", []any{timeNow})
 		}
-		invites, err := models.Invites(dbCtx, appCtx.DB, filter)
+		invites, err := models.Invites(dbCtx, appCtx.DB, filter, "inv.expires_at ASC")
 		if err != nil {
 			return aerrors.NewWithCause("failed listing invites", err)
 		}
