@@ -117,6 +117,58 @@ func RenewTLSCert(
 	return createTLSCertFromTemplate(template, pubKey, existingCert.PrivateKey, parent)
 }
 
+// NewTLSCertFromCSR creates a certificate from a Certificate Signing Request,
+// signed by the parent certificate.
+func NewTLSCertFromCSR(
+	csr *x509.CertificateRequest, timeNow, expiration time.Time, parent tls.Certificate,
+) (tls.Certificate, error) {
+	if err := csr.CheckSignature(); err != nil {
+		return tls.Certificate{}, fmt.Errorf("invalid CSR signature: %w", err)
+	}
+
+	serialNumber, err := generateSerialNumber()
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("failed generating serial number: %w", err)
+	}
+
+	// Create template from CSR data
+	template := &x509.Certificate{
+		SerialNumber:          serialNumber,
+		Subject:               csr.Subject,
+		DNSNames:              csr.DNSNames,
+		IPAddresses:           csr.IPAddresses,
+		EmailAddresses:        csr.EmailAddresses,
+		URIs:                  csr.URIs,
+		NotBefore:             timeNow,
+		NotAfter:              expiration,
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
+		IsCA:                  false,
+	}
+
+	caCert, err := ExtractCACert(parent)
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("failed extracting CA certificate: %w", err)
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, template, caCert, csr.PublicKey, parent.PrivateKey)
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("failed creating certificate from CSR: %w", err)
+	}
+
+	x509Cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("failed parsing created certificate: %w", err)
+	}
+
+	// Only return certificate, not private key (client keeps their key)
+	return tls.Certificate{
+		Certificate: [][]byte{certDER},
+		Leaf:        x509Cert,
+	}, nil
+}
+
 // ShouldRenewCert checks if a certificate should be renewed based on a
 // threshold before expiration.
 func ShouldRenewCert(cert *x509.Certificate, threshold time.Duration) (bool, error) {
@@ -126,6 +178,35 @@ func ShouldRenewCert(cert *x509.Certificate, threshold time.Duration) (bool, err
 
 	timeUntilExpiry := time.Until(cert.NotAfter)
 	return timeUntilExpiry <= threshold, nil
+}
+
+// NewCSR creates a Certificate Signing Request from an existing certificate,
+// preserving its subject and SANs for renewal purposes.
+func NewCSR(cert tls.Certificate) (*x509.CertificateRequest, error) {
+	x509Cert, err := ExtractLeafCert(cert)
+	if err != nil {
+		return nil, fmt.Errorf("failed extracting leaf certificate: %w", err)
+	}
+
+	template := &x509.CertificateRequest{
+		Subject:        x509Cert.Subject,
+		DNSNames:       x509Cert.DNSNames,
+		IPAddresses:    x509Cert.IPAddresses,
+		EmailAddresses: x509Cert.EmailAddresses,
+		URIs:           x509Cert.URIs,
+	}
+
+	csrDER, err := x509.CreateCertificateRequest(rand.Reader, template, cert.PrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed creating CSR: %w", err)
+	}
+
+	csr, err := x509.ParseCertificateRequest(csrDER)
+	if err != nil {
+		return nil, fmt.Errorf("failed parsing CSR: %w", err)
+	}
+
+	return csr, nil
 }
 
 // EncodeTLSCert converts a tls.Certificate into a PEM-encoded byte slice
@@ -194,6 +275,32 @@ func DecodeTLSCert(data []byte) (tls.Certificate, error) {
 	}
 
 	return cert, nil
+}
+
+// EncodeCSR converts an x509.CertificateRequest into a PEM-encoded byte slice.
+func EncodeCSR(csr *x509.CertificateRequest) ([]byte, error) {
+	csrPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE REQUEST",
+		Bytes: csr.Raw,
+	})
+
+	return csrPEM, nil
+}
+
+// DecodeCSR reconstructs an x509.CertificateRequest from PEM-encoded data.
+// It expects the first block to be of type CERTIFICATE REQUEST.
+func DecodeCSR(csrPEM []byte) (*x509.CertificateRequest, error) {
+	block, _ := pem.Decode(csrPEM)
+	if block == nil || block.Type != "CERTIFICATE REQUEST" {
+		return nil, errors.New("failed to decode PEM block containing CSR")
+	}
+
+	csr, err := x509.ParseCertificateRequest(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed parsing CSR: %w", err)
+	}
+
+	return csr, nil
 }
 
 // ExtractLeafCert returns the leaf certificate (end-entity certificate) from
