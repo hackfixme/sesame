@@ -55,16 +55,7 @@ func DefaultTLSConfig() *tls.Config {
 func NewTLSCert(
 	subjectName string, san []string, timeNow, expiration time.Time, parent *tls.Certificate,
 ) (tls.Certificate, error) {
-	var (
-		isCA     bool
-		keyUsage = x509.KeyUsageDigitalSignature
-	)
-	if parent == nil {
-		isCA = true
-		keyUsage |= x509.KeyUsageCertSign | x509.KeyUsageKeyEncipherment
-	}
-
-	template, err := createCertTemplate(subjectName, san, timeNow, expiration, isCA, keyUsage)
+	template, err := createCertTemplate(subjectName, san, timeNow, expiration, parent == nil)
 	if err != nil {
 		return tls.Certificate{}, err
 	}
@@ -262,12 +253,21 @@ func generateSerialNumber() (*big.Int, error) {
 // createCertTemplate creates an X.509 certificate template with the given
 // parameters.
 func createCertTemplate(
-	subjectName string, san []string, timeNow, expiration time.Time,
-	isCA bool, keyUsage x509.KeyUsage,
+	subjectName string, san []string, timeNow, expiration time.Time, isCA bool,
 ) (*x509.Certificate, error) {
 	serialNumber, err := generateSerialNumber()
 	if err != nil {
 		return nil, fmt.Errorf("failed generating serial number: %w", err)
+	}
+
+	var (
+		keyUsage    = x509.KeyUsageDigitalSignature
+		extKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
+	)
+	if isCA {
+		// The CA cert is also the server's TLS cert.
+		keyUsage |= x509.KeyUsageCertSign | x509.KeyUsageKeyEncipherment
+		extKeyUsage = append(extKeyUsage, x509.ExtKeyUsageServerAuth)
 	}
 
 	return &x509.Certificate{
@@ -276,14 +276,12 @@ func createCertTemplate(
 			Organization: []string{"HACKfixme"},
 			CommonName:   subjectName,
 		},
-		IsCA:      isCA,
-		DNSNames:  san,
-		NotBefore: timeNow,
-		NotAfter:  expiration,
-		KeyUsage:  keyUsage,
-		ExtKeyUsage: []x509.ExtKeyUsage{
-			x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth,
-		},
+		IsCA:                  isCA,
+		DNSNames:              san,
+		NotBefore:             timeNow,
+		NotAfter:              expiration,
+		KeyUsage:              keyUsage,
+		ExtKeyUsage:           extKeyUsage,
 		BasicConstraintsValid: true,
 	}, nil
 }
