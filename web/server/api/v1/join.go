@@ -95,7 +95,7 @@ func (h *Handler) JoinPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	serverTLSCACert, err := crypto.ExtractCert(serverTLSCert, true)
+	serverTLSCACert, err := crypto.ExtractCACert(serverTLSCert)
 	if err != nil {
 		_ = util.WriteJSON(w, types.NewInternalError(err.Error()))
 		return

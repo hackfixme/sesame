@@ -84,7 +84,15 @@ func RenewTLSCert(
 	existingCert tls.Certificate, timeNow, expiration time.Time, parent *tls.Certificate,
 ) (tls.Certificate, error) {
 	// Extract the existing certificate to preserve its properties
-	x509Cert, err := ExtractCert(existingCert, parent == nil)
+	var (
+		x509Cert *x509.Certificate
+		err      error
+	)
+	if parent == nil {
+		x509Cert, err = ExtractCACert(existingCert)
+	} else {
+		x509Cert, err = ExtractLeafCert(existingCert)
+	}
 	if err != nil {
 		return tls.Certificate{}, fmt.Errorf("failed to extract existing certificate: %w", err)
 	}
@@ -118,16 +126,15 @@ func RenewTLSCert(
 	return createTLSCertFromTemplate(template, pubKey, existingCert.PrivateKey, parent)
 }
 
-// ShouldRenewTLSCert checks if a certificate should be renewed based on a
-// threshold before expiration (e.g., renew if less than 30 days remaining).
-func ShouldRenewTLSCert(cert tls.Certificate, renewThreshold time.Duration) (bool, error) {
-	x509Cert, err := ExtractCert(cert, cert.Leaf != nil && cert.Leaf.IsCA)
-	if err != nil {
-		return false, fmt.Errorf("failed to extract certificate: %w", err)
+// ShouldRenewCert checks if a certificate should be renewed based on a
+// threshold before expiration.
+func ShouldRenewCert(cert *x509.Certificate, threshold time.Duration) (bool, error) {
+	if cert == nil {
+		return false, errors.New("certificate is nil")
 	}
 
-	timeUntilExpiry := time.Until(x509Cert.NotAfter)
-	return timeUntilExpiry <= renewThreshold, nil
+	timeUntilExpiry := time.Until(cert.NotAfter)
+	return timeUntilExpiry <= threshold, nil
 }
 
 // SerializeTLSCert converts a tls.Certificate to a single PEM-encoded byte slice
@@ -198,31 +205,39 @@ func DeserializeTLSCert(data []byte) (tls.Certificate, error) {
 	return cert, nil
 }
 
-// ExtractCert finds and returns either a CA certificate or the leaf certificate
-// from the certificate chain based on the ca parameter.
-func ExtractCert(cert tls.Certificate, ca bool) (*x509.Certificate, error) {
+// ExtractLeafCert returns the leaf certificate (end-entity certificate) from
+// the certificate chain.
+func ExtractLeafCert(cert tls.Certificate) (*x509.Certificate, error) {
 	if len(cert.Certificate) == 0 {
 		return nil, errors.New("no certificate data found")
 	}
 
-	if !ca {
-		// Return leaf certificate (end-entity certificate)
-		if cert.Leaf != nil {
-			return cert.Leaf, nil
-		}
-		// First certificate in chain is typically the leaf
-		x509Cert, err := x509.ParseCertificate(cert.Certificate[0])
-		if err != nil {
-			return nil, fmt.Errorf("failed parsing first certificate in chain: %w", err)
-		}
-		return x509Cert, nil
+	// Return cached leaf certificate if available
+	if cert.Leaf != nil {
+		return cert.Leaf, nil
 	}
 
-	// Search for CA certificate
+	// First certificate in chain is typically the leaf
+	x509Cert, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		return nil, fmt.Errorf("failed parsing certificate: %w", err)
+	}
+
+	return x509Cert, nil
+}
+
+// ExtractCACert finds and returns a CA certificate from the certificate chain.
+func ExtractCACert(cert tls.Certificate) (*x509.Certificate, error) {
+	if len(cert.Certificate) == 0 {
+		return nil, errors.New("no certificate data found")
+	}
+
+	// Check cached leaf certificate first
 	if cert.Leaf != nil && cert.Leaf.IsCA {
 		return cert.Leaf, nil
 	}
 
+	// Search for CA certificate in the chain
 	for _, certDER := range cert.Certificate {
 		x509Cert, err := x509.ParseCertificate(certDER)
 		if err != nil {
@@ -286,7 +301,7 @@ func createTLSCertFromTemplate(
 
 	if parent != nil {
 		// Client cert signed by the server (CA)
-		parentCert, err := ExtractCert(*parent, true)
+		parentCert, err := ExtractCACert(*parent)
 		if err != nil {
 			return tlsCert, fmt.Errorf("failed to extract CA certificate from parent: %w", err)
 		}
