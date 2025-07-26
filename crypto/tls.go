@@ -61,9 +61,7 @@ func NewTLSCert(
 	)
 	if parent == nil {
 		isCA = true
-		keyUsage |= x509.KeyUsageCertSign
-	} else {
-		keyUsage |= x509.KeyUsageKeyEncipherment
+		keyUsage |= x509.KeyUsageCertSign | x509.KeyUsageKeyEncipherment
 	}
 
 	template, err := createCertTemplate(subjectName, san, timeNow, expiration, isCA, keyUsage)
