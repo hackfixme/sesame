@@ -63,9 +63,9 @@ func (r *Remote) Save(ctx context.Context, d types.Querier, update bool) error {
 		args = append([]any{timeNow, r.Name, r.Address}, filter.Args...)
 		op = fmt.Sprintf("updating remote with %s", filterStr)
 	} else {
-		tlsClientCertPEM, err := crypto.SerializeTLSCert(*r.TLSClientCert)
+		tlsClientCertPEM, err := crypto.EncodeTLSCert(*r.TLSClientCert)
 		if err != nil {
-			return fmt.Errorf("failed serializing the client TLS certificate: %w", err)
+			return fmt.Errorf("failed encoding the client TLS certificate: %w", err)
 		}
 
 		stmt = `INSERT INTO remotes (
@@ -256,9 +256,9 @@ func Remotes(ctx context.Context, d types.Querier, filter *types.Filter) (remote
 		}
 
 		var tlsClientCert tls.Certificate
-		tlsClientCert, err = crypto.DeserializeTLSCert(tlsClientCertRaw)
+		tlsClientCert, err = crypto.DecodeTLSCert(tlsClientCertRaw)
 		if err != nil {
-			return nil, fmt.Errorf("failed deserializing TLS client certificate: %w", err)
+			return nil, fmt.Errorf("failed decoding TLS client certificate: %w", err)
 		}
 		r.TLSClientCert = &tlsClientCert
 

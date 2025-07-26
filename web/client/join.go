@@ -82,15 +82,15 @@ func (c *Client) Auth(ctx context.Context, token string) (ctypes.AuthResponseDat
 		return cresp, fmt.Errorf("failed unmarshalling response body: %w", err)
 	}
 
-	// 7. Parse and deserialize the TLS certificates.
+	// 7. Parse and decode the certificates.
 	tlsCACert, err := x509.ParseCertificate(resp.TLSCACert)
 	if err != nil {
 		return cresp, fmt.Errorf("failed parsing TLS CA certificate: %w", err)
 	}
 
-	tlsClientCert, err := crypto.DeserializeTLSCert(resp.TLSClientCert)
+	tlsClientCert, err := crypto.DecodeTLSCert(resp.TLSClientCert)
 	if err != nil {
-		return cresp, fmt.Errorf("failed deserializing TLS client certificate: %w", err)
+		return cresp, fmt.Errorf("failed decoding TLS client certificate: %w", err)
 	}
 
 	cresp.TLSCACert = tlsCACert

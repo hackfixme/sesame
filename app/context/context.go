@@ -49,5 +49,5 @@ func (c *Context) ServerTLSCert() (tlsCert tls.Certificate, err error) {
 		return
 	}
 
-	return crypto.DeserializeTLSCert(certNull.V)
+	return crypto.DecodeTLSCert(certNull.V)
 }

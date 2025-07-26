@@ -119,7 +119,7 @@ func (h *Handler) JoinPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 7. Assemble the response payload, and serialize it to JSON.
-	clientTLSCertPEM, err := crypto.SerializeTLSCert(clientTLSCert)
+	clientTLSCertPEM, err := crypto.EncodeTLSCert(clientTLSCert)
 	if err != nil {
 		_ = util.WriteJSON(w, types.NewInternalError(err.Error()))
 		return

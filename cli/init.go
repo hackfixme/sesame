@@ -75,9 +75,9 @@ func initDB(appCtx *actx.Context) error {
 		return fmt.Errorf("failed generating the server TLS certificate: %w", err)
 	}
 
-	tlsCertPEM, err := crypto.SerializeTLSCert(tlsCert)
+	tlsCertPEM, err := crypto.EncodeTLSCert(tlsCert)
 	if err != nil {
-		return fmt.Errorf("failed serializing the server TLS certificate: %w", err)
+		return fmt.Errorf("failed encoding the server TLS certificate: %w", err)
 	}
 
 	err = appCtx.DB.Init(appCtx.Version.Semantic, tlsCertPEM, appCtx.Logger)

@@ -128,9 +128,9 @@ func ShouldRenewCert(cert *x509.Certificate, threshold time.Duration) (bool, err
 	return timeUntilExpiry <= threshold, nil
 }
 
-// SerializeTLSCert converts a tls.Certificate to a single PEM-encoded byte slice
+// EncodeTLSCert converts a tls.Certificate into a PEM-encoded byte slice
 // containing the certificate chain followed by the private key.
-func SerializeTLSCert(cert tls.Certificate) ([]byte, error) {
+func EncodeTLSCert(cert tls.Certificate) ([]byte, error) {
 	var buf bytes.Buffer
 
 	// Encode each certificate in the chain as a CERTIFICATE PEM block.
@@ -159,10 +159,10 @@ func SerializeTLSCert(cert tls.Certificate) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// DeserializeTLSCert reconstructs a tls.Certificate from PEM-encoded data
-// containing certificate chain and private key blocks.
+// DecodeTLSCert reconstructs a tls.Certificate from PEM-encoded data containing
+// a certificate chain and private key blocks.
 // It expects one or more CERTIFICATE blocks followed by one PRIVATE KEY block.
-func DeserializeTLSCert(data []byte) (tls.Certificate, error) {
+func DecodeTLSCert(data []byte) (tls.Certificate, error) {
 	var (
 		certPEMs [][]byte
 		keyPEM   []byte
