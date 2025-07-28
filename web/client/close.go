@@ -21,7 +21,7 @@ import (
 func (c *Client) Close(ctx context.Context, clients []string, serviceName string) (rerr error) {
 	url := &url.URL{Scheme: "https", Host: c.address, Path: "/api/v1/close"}
 
-	reqData := stypes.ClosePostRequestData{
+	reqData := stypes.CloseRequest{
 		Clients:     clients,
 		ServiceName: serviceName,
 	}
@@ -54,14 +54,14 @@ func (c *Client) Close(ctx context.Context, clients []string, serviceName string
 		return aerrors.NewWithCause("failed reading response body", err, errFields...)
 	}
 
-	var respData stypes.ClosePostResponse
+	var respData stypes.CloseResponse
 	err = json.Unmarshal(respBody, &respData)
 	if err != nil {
 		return aerrors.NewWithCause("failed unmarshalling response body", err, errFields...)
 	}
 
 	errFields = append(errFields, "status_code", resp.StatusCode, "status", resp.Status)
-	if respData.Error != "" {
+	if respData.Error != nil {
 		errFields = append(errFields, "cause", respData.Error)
 	}
 	if resp.StatusCode != http.StatusOK {

@@ -125,7 +125,7 @@ func TestManager_GrantAccess(t *testing.T) {
 			require.NoError(t, err)
 
 			svc := &models.Service{Name: "web", Port: 8080, MaxAccessDuration: time.Hour}
-			err = manager.GrantAccess(ipSet, svc, tt.duration)
+			err = manager.GrantAccess(ipSet, svc, tt.duration, nil)
 			if tt.expErr != "" {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tt.expErr)
@@ -208,7 +208,7 @@ func TestManager_DenyAccess(t *testing.T) {
 				}
 			}
 
-			err = manager.DenyAccess(ipSet, svc)
+			err = manager.DenyAccess(ipSet, svc, nil)
 			if tt.expErr != "" {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tt.expErr)

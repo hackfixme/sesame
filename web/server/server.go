@@ -44,9 +44,15 @@ func New(appCtx *actx.Context, addr string, tlsCert *tls.Certificate) (*Server, 
 	}
 
 	logger := appCtx.Logger.With("component", "web-server")
+
+	handlers, err := SetupHandlers(appCtx, logger)
+	if err != nil {
+		return nil, err
+	}
+
 	srv := &Server{
 		Server: &http.Server{
-			Handler:           SetupHandlers(appCtx, logger),
+			Handler:           handlers,
 			Addr:              addr,
 			ReadHeaderTimeout: 10 * time.Second,
 			ReadTimeout:       30 * time.Second,
@@ -83,10 +89,15 @@ func (s *Server) ListenAndServe() error {
 }
 
 // SetupHandlers configures the server HTTP handlers.
-func SetupHandlers(appCtx *actx.Context, logger *slog.Logger) http.Handler {
+func SetupHandlers(appCtx *actx.Context, logger *slog.Logger) (http.Handler, error) {
 	mux := http.NewServeMux()
 
-	mux.Handle("/api/v1/", http.StripPrefix("/api/v1", api.SetupHandlers(appCtx, logger)))
+	apiHandlers, err := api.SetupHandlers(appCtx, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	mux.Handle("/api/v1/", http.StripPrefix("/api/v1", apiHandlers))
 
 	logBody := func(_ *http.Request) bool {
 		return appCtx.LogLevel == slog.LevelDebug
@@ -102,5 +113,5 @@ func SetupHandlers(appCtx *actx.Context, logger *slog.Logger) http.Handler {
 
 	handler := chi.Chain(loggerMW).Handler(mux)
 
-	return handler
+	return handler, nil
 }

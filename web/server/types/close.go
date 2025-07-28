@@ -1,14 +1,24 @@
 package types
 
-// ClosePostRequestData is the request data to deny access of one or more
-// clients to a service.
-type ClosePostRequestData struct {
+import "net/http"
+
+// CloseRequest is the request data to deny access of one or more clients to a
+// service.
+type CloseRequest struct {
+	BaseRequest `json:"-"`
 	Clients     []string `json:"clients"`
 	ServiceName string   `json:"service_name"`
 }
 
-// ClosePostResponse represents a successful HTTP response to a request to grant
-// access to one or more clients to a service.
-type ClosePostResponse struct {
-	Response
+// CloseResponse represents an HTTP response to a request to deny access of one
+// or more clients to a service.
+type CloseResponse struct {
+	BaseResponse
+}
+
+// NewCloseResponse creates a new CloseResponse with HTTP 200 status.
+func NewCloseResponse() (*CloseResponse, error) {
+	return &CloseResponse{
+		BaseResponse: NewBaseResponse(http.StatusOK, nil),
+	}, nil
 }

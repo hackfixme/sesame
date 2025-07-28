@@ -127,7 +127,7 @@ func TestAppRemoteIntegration(t *testing.T) {
 	// Confirm that the firewall rule was added on app1.
 	assertLogContains(t, h, app1.stderr.String(), []string{
 		"INF granted access",
-		"user_name=newuser",
+		"user.name=newuser",
 		"service.name=python",
 		"service.port=8080",
 		"ip_ranges=[10.0.0.10-10.0.0.10]",
@@ -144,7 +144,7 @@ func TestAppRemoteIntegration(t *testing.T) {
 	// Confirm that the firewall rule was removed on app1.
 	assertLogContains(t, h, app1.stderr.String(), []string{
 		"INF denied access",
-		"user_name=newuser",
+		"user.name=newuser",
 		"service.name=python",
 		"service.port=8080",
 		"ip_ranges=[10.0.0.10-10.0.0.10]",

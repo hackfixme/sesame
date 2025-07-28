@@ -1,2 +1,2 @@
-// Package types contains shared Sesame HTTP API server types.
+// Package types contains Sesame HTTP server types.
 package types

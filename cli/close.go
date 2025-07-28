@@ -71,7 +71,7 @@ func (c *Close) Run(appCtx *actx.Context) error {
 			return aerrors.NewWithCause("unknown service", err, "service.name", c.ServiceName)
 		}
 
-		err = fwMgr.DenyAccess(ipSet, svc)
+		err = fwMgr.DenyAccess(ipSet, svc, nil)
 		if err != nil {
 			return aerrors.NewWithCause(
 				"failed denying access", err,

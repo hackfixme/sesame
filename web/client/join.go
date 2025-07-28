@@ -75,8 +75,8 @@ func (c *Client) Auth(ctx context.Context, token string) (ctypes.AuthResponseDat
 		return cresp, fmt.Errorf("failed decrypting response body: %w", err)
 	}
 
-	// 6. Unmarshal the response data
-	var resp stypes.JoinPostResponseData
+	// 6. Unmarshal the response.
+	var resp stypes.JoinResponse
 	err = json.Unmarshal(respBodyJSON, &resp)
 	if err != nil {
 		return cresp, fmt.Errorf("failed unmarshalling response body: %w", err)

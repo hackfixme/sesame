@@ -41,7 +41,11 @@ func NewManager(firewall ftypes.Firewall, opts ...Option) (*Manager, error) {
 
 // GrantAccess to the specified service from a set of IP addresses for a
 // specific amount of time. The passed IPSet must consist of valid IPRanges.
-func (m *Manager) GrantAccess(ipSet *netipx.IPSet, svc *models.Service, duration time.Duration) error {
+// The User argument indicates the remote user who initiated this change.
+// If nil, it means that the author is the local admin user.
+func (m *Manager) GrantAccess(
+	ipSet *netipx.IPSet, svc *models.Service, duration time.Duration, user *models.User,
+) error {
 	ipRanges := ipSet.Ranges()
 	ipRangesStr := make([]string, len(ipRanges))
 	for i, r := range ipRanges {
@@ -55,6 +59,9 @@ func (m *Manager) GrantAccess(ipSet *netipx.IPSet, svc *models.Service, duration
 		"service.name", svc.Name,
 		"service.port", svc.Port,
 	)
+	if user != nil {
+		logger = logger.With("user.name", user.Name)
+	}
 
 	if duration > svc.MaxAccessDuration {
 		logger.Warn("requested duration exceeds configured service max; clamping to max",
@@ -79,7 +86,9 @@ func (m *Manager) GrantAccess(ipSet *netipx.IPSet, svc *models.Service, duration
 
 // DenyAccess to the specified service from a set of IP addresses. The passed
 // IPSet must consist of valid IPRanges.
-func (m *Manager) DenyAccess(ipSet *netipx.IPSet, svc *models.Service) error {
+// The User argument indicates the remote user who initiated this change.
+// If nil, it means that the author is the local admin user.
+func (m *Manager) DenyAccess(ipSet *netipx.IPSet, svc *models.Service, user *models.User) error {
 	ipRanges := ipSet.Ranges()
 	ipRangesStr := make([]string, len(ipRanges))
 	for i, r := range ipRanges {
@@ -93,6 +102,9 @@ func (m *Manager) DenyAccess(ipSet *netipx.IPSet, svc *models.Service) error {
 		"service.name", svc.Name,
 		"service.port", svc.Port,
 	)
+	if user != nil {
+		logger = logger.With("user.name", user.Name)
+	}
 
 	if err := m.firewall.Deny(ipSet, svc.Port); err != nil {
 		return err

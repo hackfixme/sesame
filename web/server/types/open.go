@@ -1,17 +1,28 @@
 package types
 
-import "time"
+import (
+	"net/http"
+	"time"
+)
 
-// OpenPostRequestData is the request data to grant access of one or more
-// clients to a service.
-type OpenPostRequestData struct {
+// OpenRequest is the request data to grant access of one or more clients to a
+// service.
+type OpenRequest struct {
+	BaseRequest `json:"-"`
 	Clients     []string      `json:"clients"`
 	ServiceName string        `json:"service_name"`
 	Duration    time.Duration `json:"duration"`
 }
 
-// OpenPostResponse represents a successful HTTP response to a request to grant
+// OpenResponse represents a successful HTTP response to a request to grant
 // access to one or more clients to a service.
-type OpenPostResponse struct {
-	Response
+type OpenResponse struct {
+	BaseResponse
+}
+
+// NewOpenResponse creates a new OpenResponse with HTTP 200 status.
+func NewOpenResponse() (*OpenResponse, error) {
+	return &OpenResponse{
+		BaseResponse: NewBaseResponse(http.StatusOK, nil),
+	}, nil
 }

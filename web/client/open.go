@@ -22,7 +22,7 @@ import (
 func (c *Client) Open(ctx context.Context, clients []string, serviceName string, duration time.Duration) (rerr error) {
 	url := &url.URL{Scheme: "https", Host: c.address, Path: "/api/v1/open"}
 
-	reqData := stypes.OpenPostRequestData{
+	reqData := stypes.OpenRequest{
 		Clients:     clients,
 		ServiceName: serviceName,
 		Duration:    duration,
@@ -50,20 +50,23 @@ func (c *Client) Open(ctx context.Context, clients []string, serviceName string,
 			rerr = fmt.Errorf("failed closing response body: %w", err)
 		}
 	}()
+	errFields = append(errFields, "status_code", resp.StatusCode, "status", resp.Status)
+	if resp.StatusCode != http.StatusOK {
+		return aerrors.NewWith("request failed", errFields...)
+	}
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return aerrors.NewWithCause("failed reading response body", err, errFields...)
 	}
 
-	var respData stypes.OpenPostResponse
+	var respData stypes.OpenResponse
 	err = json.Unmarshal(respBody, &respData)
 	if err != nil {
 		return aerrors.NewWithCause("failed unmarshalling response body", err, errFields...)
 	}
 
-	errFields = append(errFields, "status_code", resp.StatusCode, "status", resp.Status)
-	if respData.Error != "" {
+	if respData.Error != nil {
 		errFields = append(errFields, "cause", respData.Error)
 	}
 	if resp.StatusCode != http.StatusOK {

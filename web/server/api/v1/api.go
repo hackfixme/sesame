@@ -1,30 +1,78 @@
 package api
 
 import (
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-
 	actx "go.hackfix.me/sesame/app/context"
-	"go.hackfix.me/sesame/web/server/middleware"
+	"go.hackfix.me/sesame/crypto"
+	"go.hackfix.me/sesame/firewall"
+	"go.hackfix.me/sesame/web/server/handler"
 )
 
 // Handler is the API endpoint handler.
 type Handler struct {
-	appCtx *actx.Context
-	logger *slog.Logger
+	appCtx        *actx.Context
+	logger        *slog.Logger
+	fwMgr         *firewall.Manager
+	tlsServerCert tls.Certificate
+	tlsCACert     *x509.Certificate
 }
 
 // SetupHandlers configures the web API handlers.
-func SetupHandlers(appCtx *actx.Context, logger *slog.Logger) http.Handler {
-	h := Handler{appCtx: appCtx, logger: logger}
+func SetupHandlers(appCtx *actx.Context, logger *slog.Logger) (http.Handler, error) {
+	fwCfg := appCtx.Config.Firewall
+	if !fwCfg.Type.Valid {
+		return nil, fmt.Errorf("no firewall was configured on this system")
+	}
+
+	_, fwMgr, err := firewall.Setup(appCtx, fwCfg.Type.V, fwCfg.DefaultAccessDuration.V, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed setting up firewall: %w", err)
+	}
+
+	tlsServerCert, err := appCtx.ServerTLSCert()
+	if err != nil {
+		return nil, err
+	}
+
+	tlsCACert, err := crypto.ExtractCACert(tlsServerCert)
+	if err != nil {
+		return nil, fmt.Errorf("failed extracting CA cert from TLS cert: %w", err)
+	}
+
+	if len(tlsCACert.DNSNames) == 0 {
+		return nil, errors.New("no Subject Alternative Name values found in server CA certificate")
+	}
+
+	h := Handler{
+		appCtx:        appCtx,
+		fwMgr:         fwMgr,
+		tlsServerCert: tlsServerCert,
+		tlsCACert:     tlsCACert,
+		logger:        logger,
+	}
+
+	httpPipeline := handler.NewPipeline().
+		ProcessResponse(
+			handler.MarshalJSON,
+			handler.Encrypt,
+			handler.EncodeBase58,
+		)
+
+	httpsPipeline := handler.NewPipeline().
+		Auth(handler.TLSAuth(appCtx)).
+		ProcessRequest(handler.UnmarshalJSON).
+		ProcessResponse(handler.MarshalJSON)
+
 	mux := http.NewServeMux()
-	mwChain := chi.Chain(middleware.Authn(appCtx, logger))
+	mux.Handle("POST /join", handler.Handle(h.Join, httpPipeline.Auth(handler.InviteTokenAuth(appCtx))))
+	mux.Handle("POST /open", handler.Handle(h.Open, httpsPipeline))
+	mux.Handle("POST /close", handler.Handle(h.Close, httpsPipeline))
 
-	mux.HandleFunc("POST /join", h.JoinPost)
-	mux.Handle("POST /open", mwChain.HandlerFunc(h.OpenPost))
-	mux.Handle("POST /close", mwChain.HandlerFunc(h.ClosePost))
-
-	return mux
+	return mux, nil
 }

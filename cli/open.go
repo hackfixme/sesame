@@ -68,7 +68,7 @@ func (c *Open) Run(appCtx *actx.Context) error {
 			return aerrors.NewWithCause("unknown service", err, "service.name", c.ServiceName)
 		}
 
-		err = fwMgr.GrantAccess(ipSet, svc, c.Duration)
+		err = fwMgr.GrantAccess(ipSet, svc, c.Duration, nil)
 		if err != nil {
 			return aerrors.NewWithCause(
 				"failed granting access", err,
