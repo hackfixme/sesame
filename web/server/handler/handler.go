@@ -21,8 +21,6 @@ import (
 // overhead of reflection likely means that this won't be suitable for servers
 // where performance is paramount. Trading performance for API ergonomics was a
 // deliberate design decision.
-//
-//nolint:gocognit // Slightly high, but acceptable, complexity.
 func Handle[Req types.Request, Resp types.Response](
 	handlerFn func(context.Context, Req) (Resp, error),
 	p *Pipeline,
@@ -38,21 +36,27 @@ func Handle[Req types.Request, Resp types.Response](
 		req.SetHTTPRequest(r)
 
 		handleErr := func(err error) bool {
-			if err != nil {
-				// Ensure that the response handlers have a valid HTTP error.
-				var terr *types.Error
-				if errors.As(err, &terr) {
-					if terr.StatusCode == 0 {
-						terr.StatusCode = http.StatusInternalServerError
-					}
-				} else {
-					terr = types.NewError(http.StatusInternalServerError, err.Error())
-				}
-				resp.SetStatusCode(terr.StatusCode)
-				resp.SetError(terr)
-				return true
+			if err == nil {
+				return false
 			}
-			return false
+
+			// Ensure that response handlers have a valid HTTP error and status code.
+			var (
+				terr       *types.Error
+				statusCode = http.StatusInternalServerError
+			)
+			switch {
+			case !errors.As(err, &terr) || terr == nil:
+				terr = types.NewError(statusCode, err.Error())
+			case terr.StatusCode == 0:
+				terr.StatusCode = statusCode
+			default:
+				statusCode = terr.StatusCode
+			}
+
+			resp.SetStatusCode(statusCode)
+			resp.SetError(terr)
+			return true
 		}
 
 		// Response handling is deferred, since it should happen in both success and
