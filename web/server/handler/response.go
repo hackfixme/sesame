@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 
@@ -72,8 +71,8 @@ func writeResponse(ctx context.Context, w http.ResponseWriter, resp types.Respon
 	data := getResponseData(ctx)
 
 	// Respond with at least some kind of useful response, even if it's invalid.
-	var terr *types.Error
-	if len(data) == 0 && errors.As(resp.GetError(), &terr) {
+	terr := resp.GetError()
+	if len(data) == 0 && terr != nil {
 		data = []byte(terr.Message)
 	}
 

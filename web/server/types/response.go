@@ -1,14 +1,13 @@
 package types
 
 import (
-	"errors"
 	"net/http"
 )
 
 // Response defines the interface for HTTP response wrappers.
 type Response interface {
-	GetError() error
-	SetError(error)
+	GetError() *Error
+	SetError(*Error)
 	GetStatusCode() int
 	SetStatusCode(int)
 	SetHeader(http.Header)
@@ -19,7 +18,7 @@ type Response interface {
 type BaseResponse struct {
 	StatusCode int    `json:"status_code"`
 	Status     string `json:"status"`
-	Error      error  `json:"error,omitempty"`
+	Error      *Error `json:"error,omitempty"`
 	header     http.Header
 }
 
@@ -35,28 +34,27 @@ func NewBaseResponse(statusCode int, err error) BaseResponse {
 	}
 
 	if err != nil {
-		resp.Error = err
+		resp.Error = &Error{StatusCode: statusCode, Message: err.Error()}
 	}
 
 	return resp
 }
 
 // GetError returns the error associated with this response.
-func (r *BaseResponse) GetError() error {
+func (r *BaseResponse) GetError() *Error {
 	return r.Error
 }
 
 // SetError sets the error for this response.
-func (r *BaseResponse) SetError(err error) {
+func (r *BaseResponse) SetError(err *Error) {
 	r.Error = err
 }
 
 // GetStatusCode returns the HTTP status code for the response.
 func (r *BaseResponse) GetStatusCode() int {
 	code := r.StatusCode
-	var terr *Error
-	if code == 0 && errors.As(r.Error, &terr) {
-		code = terr.StatusCode
+	if code == 0 && r.Error != nil && r.Error.StatusCode > 0 {
+		code = r.Error.StatusCode
 	}
 	return code
 }
