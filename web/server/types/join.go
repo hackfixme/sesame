@@ -13,14 +13,20 @@ type JoinRequest struct {
 	BaseRequest `json:"-"`
 }
 
-// JoinResponse contains the data returned for a successful join request.
+// JoinResponse is the response returned on a join request.
 type JoinResponse struct {
 	BaseResponse
-	TLSCACert     []byte `json:"tls_ca_cert"`
-	TLSClientCert []byte `json:"tls_client_cert"`
+	Data JoinResponseData `json:"data"`
 }
 
-// NewJoinResponse creates a new JoinResponse with the provided certificates.
+// JoinResponseData is the data sent in the JoinResponse.
+type JoinResponseData struct {
+	TLSCACert     []byte `json:"tls_ca_cert,omitempty"`
+	TLSClientCert []byte `json:"tls_client_cert,omitempty"`
+}
+
+// NewJoinResponse creates a new JoinResponse with the provided certificates and
+// HTTP 200 status.
 func NewJoinResponse(caCert *x509.Certificate, clientCert tls.Certificate) (*JoinResponse, error) {
 	clientCertPEM, err := crypto.EncodeTLSCert(clientCert)
 	if err != nil {
@@ -28,9 +34,11 @@ func NewJoinResponse(caCert *x509.Certificate, clientCert tls.Certificate) (*Joi
 	}
 
 	resp := &JoinResponse{
-		BaseResponse:  NewBaseResponse(http.StatusOK, nil),
-		TLSCACert:     caCert.Raw,
-		TLSClientCert: clientCertPEM,
+		BaseResponse: NewBaseResponse(http.StatusOK, nil),
+		Data: JoinResponseData{
+			TLSCACert:     caCert.Raw,
+			TLSClientCert: clientCertPEM,
+		},
 	}
 
 	return resp, nil

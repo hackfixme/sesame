@@ -10,11 +10,15 @@ type CloseRequest struct {
 	ServiceName string   `json:"service_name"`
 }
 
-// CloseResponse represents an HTTP response to a request to deny access of one
-// or more clients to a service.
+// CloseResponse is the response to a request to deny access of one or more
+// clients to a service.
 type CloseResponse struct {
 	BaseResponse
+	Data CloseResponseData `json:"data"`
 }
+
+// CloseResponseData is the data sent in the CloseResponse.
+type CloseResponseData struct{}
 
 // NewCloseResponse creates a new CloseResponse with HTTP 200 status.
 func NewCloseResponse() (*CloseResponse, error) {

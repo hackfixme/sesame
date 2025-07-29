@@ -14,11 +14,15 @@ type OpenRequest struct {
 	Duration    time.Duration `json:"duration"`
 }
 
-// OpenResponse represents a successful HTTP response to a request to grant
-// access to one or more clients to a service.
+// OpenResponse is the response to a request to grant access of one or more
+// clients to a service.
 type OpenResponse struct {
 	BaseResponse
+	Data OpenResponseData `json:"data"`
 }
+
+// OpenResponseData is the data sent in the OpenResponse.
+type OpenResponseData struct{}
 
 // NewOpenResponse creates a new OpenResponse with HTTP 200 status.
 func NewOpenResponse() (*OpenResponse, error) {

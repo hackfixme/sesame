@@ -83,12 +83,12 @@ func (c *Client) Auth(ctx context.Context, token string) (ctypes.AuthResponseDat
 	}
 
 	// 7. Parse and decode the certificates.
-	tlsCACert, err := x509.ParseCertificate(resp.TLSCACert)
+	tlsCACert, err := x509.ParseCertificate(resp.Data.TLSCACert)
 	if err != nil {
 		return cresp, fmt.Errorf("failed parsing TLS CA certificate: %w", err)
 	}
 
-	tlsClientCert, err := crypto.DecodeTLSCert(resp.TLSClientCert)
+	tlsClientCert, err := crypto.DecodeTLSCert(resp.Data.TLSClientCert)
 	if err != nil {
 		return cresp, fmt.Errorf("failed decoding TLS client certificate: %w", err)
 	}
