@@ -12,11 +12,14 @@ import (
 
 	actx "go.hackfix.me/sesame/app/context"
 	"go.hackfix.me/sesame/web/server"
+	stypes "go.hackfix.me/sesame/web/server/types"
 )
 
 // Serve starts the web server.
 type Serve struct {
 	Address string `arg:"" help:"[host]:port to listen on"`
+	//nolint:lll // Long struct tags are unavoidable.
+	ErrorLevel stypes.ErrorLevel `default:"none" enum:"none,minimal,full" help:"Detail level of error messages returned to clients from untrusted HTTP endpoints (e.g. /join), in order to avoid leaking sensitive information. This doesn't affect response status codes. Valid values: ${enum} \n none: hide all error messages; minimal: sanitize error messages; full: keep error messages intact"`
 }
 
 // Run the serve command.
@@ -26,7 +29,7 @@ func (c *Serve) Run(appCtx *actx.Context) error {
 		return err
 	}
 
-	srv, err := server.New(appCtx, c.Address, &tlsCert)
+	srv, err := server.New(appCtx, c.Address, &tlsCert, c.ErrorLevel)
 	if err != nil {
 		return err
 	}

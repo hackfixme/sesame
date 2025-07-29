@@ -12,6 +12,7 @@ import (
 	"go.hackfix.me/sesame/crypto"
 	"go.hackfix.me/sesame/firewall"
 	"go.hackfix.me/sesame/web/server/handler"
+	"go.hackfix.me/sesame/web/server/types"
 )
 
 // Handler is the API endpoint handler.
@@ -24,7 +25,9 @@ type Handler struct {
 }
 
 // SetupHandlers configures the web API handlers.
-func SetupHandlers(appCtx *actx.Context, logger *slog.Logger) (http.Handler, error) {
+func SetupHandlers(
+	appCtx *actx.Context, errLvl types.ErrorLevel, logger *slog.Logger,
+) (http.Handler, error) {
 	fwCfg := appCtx.Config.Firewall
 	if !fwCfg.Type.Valid {
 		return nil, fmt.Errorf("no firewall was configured on this system")
@@ -57,14 +60,14 @@ func SetupHandlers(appCtx *actx.Context, logger *slog.Logger) (http.Handler, err
 		logger:        logger,
 	}
 
-	httpPipeline := handler.NewPipeline().
+	httpPipeline := handler.NewPipeline(errLvl).
 		ProcessResponse(
 			handler.MarshalJSON,
 			handler.Encrypt,
 			handler.EncodeBase58,
 		)
 
-	httpsPipeline := handler.NewPipeline().
+	httpsPipeline := handler.NewPipeline(types.ErrorLevelFull).
 		Auth(handler.TLSAuth(appCtx)).
 		ProcessRequest(handler.UnmarshalJSON).
 		ProcessResponse(handler.MarshalJSON)

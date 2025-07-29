@@ -21,6 +21,8 @@ import (
 // overhead of reflection likely means that this won't be suitable for servers
 // where performance is paramount. Trading performance for API ergonomics was a
 // deliberate design decision.
+//
+//nolint:gocognit // Slightly high, but acceptable, complexity.
 func Handle[Req types.Request, Resp types.Response](
 	handlerFn func(context.Context, Req) (Resp, error),
 	p *Pipeline,
@@ -51,6 +53,11 @@ func Handle[Req types.Request, Resp types.Response](
 			case terr.StatusCode == 0:
 				terr.StatusCode = statusCode
 			default:
+				statusCode = terr.StatusCode
+			}
+
+			terr = sanitizeError(terr, p.errorLevel)
+			if terr != nil {
 				statusCode = terr.StatusCode
 			}
 

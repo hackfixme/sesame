@@ -15,6 +15,7 @@ import (
 	actx "go.hackfix.me/sesame/app/context"
 	"go.hackfix.me/sesame/crypto"
 	"go.hackfix.me/sesame/web/server/api/v1"
+	"go.hackfix.me/sesame/web/server/types"
 )
 
 // Server is a wrapper around http.Server with some custom behavior.
@@ -26,7 +27,9 @@ type Server struct {
 // New returns a new web Server instance that will listen on addr for both TCP
 // and TLS connections. If tlsCert is provided, it configures TLS and requires
 // clients using TLS to authenticate with certificates signed by tlsCert.
-func New(appCtx *actx.Context, addr string, tlsCert *tls.Certificate) (*Server, error) {
+func New(
+	appCtx *actx.Context, addr string, tlsCert *tls.Certificate, errLvl types.ErrorLevel,
+) (*Server, error) {
 	var tlsCfg *tls.Config
 	if tlsCert != nil {
 		tlsCfg = crypto.DefaultTLSConfig()
@@ -45,7 +48,7 @@ func New(appCtx *actx.Context, addr string, tlsCert *tls.Certificate) (*Server, 
 
 	logger := appCtx.Logger.With("component", "web-server")
 
-	handlers, err := SetupHandlers(appCtx, logger)
+	handlers, err := SetupHandlers(appCtx, errLvl, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -89,10 +92,10 @@ func (s *Server) ListenAndServe() error {
 }
 
 // SetupHandlers configures the server HTTP handlers.
-func SetupHandlers(appCtx *actx.Context, logger *slog.Logger) (http.Handler, error) {
+func SetupHandlers(appCtx *actx.Context, errLvl types.ErrorLevel, logger *slog.Logger) (http.Handler, error) {
 	mux := http.NewServeMux()
 
-	apiHandlers, err := api.SetupHandlers(appCtx, logger)
+	apiHandlers, err := api.SetupHandlers(appCtx, errLvl, logger)
 	if err != nil {
 		return nil, err
 	}
