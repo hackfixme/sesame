@@ -22,12 +22,6 @@ func NewPipeline(errorLevel types.ErrorLevel) *Pipeline {
 	return &Pipeline{errorLevel: errorLevel}
 }
 
-// Auth sets the authenticator for this pipeline.
-func (p *Pipeline) Auth(auth Authenticator) *Pipeline {
-	p.auth = auth
-	return p
-}
-
 // ProcessRequest adds one or more request processors to the pipeline.
 func (p *Pipeline) ProcessRequest(processor ...RequestProcessor) *Pipeline {
 	p.requestProcessors = append(p.requestProcessors, processor...)
@@ -37,6 +31,12 @@ func (p *Pipeline) ProcessRequest(processor ...RequestProcessor) *Pipeline {
 // ProcessResponse adds one or more response processors to the pipeline.
 func (p *Pipeline) ProcessResponse(processor ...ResponseProcessor) *Pipeline {
 	p.responseProcessors = append(p.responseProcessors, processor...)
+	return p
+}
+
+// WithAuth sets the authenticator for this pipeline.
+func (p *Pipeline) WithAuth(auth Authenticator) *Pipeline {
+	p.auth = auth
 	return p
 }
 

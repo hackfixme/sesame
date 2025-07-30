@@ -68,11 +68,12 @@ func SetupHandlers(
 		)
 
 	httpsPipeline := handler.NewPipeline(types.ErrorLevelFull).
-		WithSerializer(handler.JSON()).
-		Auth(handler.TLSAuth(appCtx))
+		WithAuth(handler.TLSAuth(appCtx)).
+		WithSerializer(handler.JSON())
 
 	mux := http.NewServeMux()
-	mux.Handle("POST /join", handler.Handle(h.Join, httpPipeline.Auth(handler.InviteTokenAuth(appCtx))))
+	mux.Handle("POST /join", handler.Handle(h.Join,
+		httpPipeline.WithAuth(handler.InviteTokenAuth(appCtx))))
 	mux.Handle("POST /open", handler.Handle(h.Open, httpsPipeline))
 	mux.Handle("POST /close", handler.Handle(h.Close, httpsPipeline))
 
