@@ -105,6 +105,10 @@ func Handle[Req types.Request, Resp types.Response](
 
 // createInstance returns a new instance of type T.
 //
+// TODO: Consider caching reflection operations if this becomes a performance
+// bottleneck at high throughput (>1000 req/s). Current overhead is negligible
+// for low-traffic APIs. Profile before optimizing.
+//
 //nolint:ireturn,nolintlint // Required for generic functionality.
 func createInstance[T any]() T {
 	var zero T
