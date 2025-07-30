@@ -17,10 +17,6 @@ import (
 // encryption are required because this handler is meant to be served from a
 // plain HTTP endpoint.
 func (h *Handler) Join(_ context.Context, req *types.JoinRequest) (*types.JoinResponse, error) {
-	if req.User == nil {
-		return nil, types.NewError(http.StatusUnauthorized, "user object not found in the request context")
-	}
-
 	timeNow := h.appCtx.TimeNow()
 	// TODO: Figure out certificate lifecycle management, make expiration configurable, etc.
 	clientTLSCert, err := crypto.NewTLSCert(

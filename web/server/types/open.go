@@ -14,6 +14,20 @@ type OpenRequest struct {
 	Duration    time.Duration `json:"duration"`
 }
 
+// Validate checks that the request is valid and ready for processing.
+// Returns an error if validation fails.
+func (r *OpenRequest) Validate() error {
+	if r.User == nil {
+		return NewError(http.StatusUnauthorized, "user object not found in the request context")
+	}
+
+	if r.ServiceName == "" {
+		return NewError(http.StatusBadRequest, "service name must not be empty")
+	}
+
+	return nil
+}
+
 // OpenResponse is the response to a request to grant access of one or more
 // clients to a service.
 type OpenResponse struct {

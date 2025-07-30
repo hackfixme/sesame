@@ -13,6 +13,15 @@ type JoinRequest struct {
 	BaseRequest `json:"-"`
 }
 
+// Validate checks that the request is valid and ready for processing.
+// Returns an error if validation fails.
+func (r *JoinRequest) Validate() error {
+	if r.User == nil {
+		return NewError(http.StatusUnauthorized, "user object not found in the request context")
+	}
+	return nil
+}
+
 // JoinResponse is the response returned on a join request.
 type JoinResponse struct {
 	BaseResponse

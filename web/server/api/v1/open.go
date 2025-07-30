@@ -13,10 +13,6 @@ import (
 // to services on this node. The client is expected to have previously been
 // authenticated with a valid TLS client certificate (mTLS).
 func (h *Handler) Open(_ context.Context, req *types.OpenRequest) (*types.OpenResponse, error) {
-	if req.User == nil {
-		return nil, types.NewError(http.StatusUnauthorized, "user object not found in the request context")
-	}
-
 	ipSet, err := firewall.ParseToIPSet(req.Clients...)
 	if err != nil {
 		return nil, types.NewError(http.StatusBadRequest, err.Error())

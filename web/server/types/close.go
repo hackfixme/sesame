@@ -10,6 +10,20 @@ type CloseRequest struct {
 	ServiceName string   `json:"service_name"`
 }
 
+// Validate checks that the request is valid and ready for processing.
+// Returns an error if validation fails.
+func (r *CloseRequest) Validate() error {
+	if r.User == nil {
+		return NewError(http.StatusUnauthorized, "user object not found in the request context")
+	}
+
+	if r.ServiceName == "" {
+		return NewError(http.StatusBadRequest, "service name must not be empty")
+	}
+
+	return nil
+}
+
 // CloseResponse is the response to a request to deny access of one or more
 // clients to a service.
 type CloseResponse struct {
