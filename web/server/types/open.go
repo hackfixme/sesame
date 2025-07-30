@@ -25,6 +25,10 @@ func (r *OpenRequest) Validate() error {
 		return NewError(http.StatusBadRequest, "service name must not be empty")
 	}
 
+	if len(r.Clients) == 0 {
+		return NewError(http.StatusBadRequest, "clients must not be empty")
+	}
+
 	return nil
 }
 

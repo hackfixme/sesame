@@ -13,13 +13,7 @@ import (
 // to services on this node. The client is expected to have previously been
 // authenticated with a valid TLS client certificate (mTLS).
 func (h *Handler) Close(_ context.Context, req *types.CloseRequest) (*types.CloseResponse, error) {
-	// Assume that if no clients were specified, the service should be closed for all.
-	clients := req.Clients
-	if len(clients) == 0 {
-		clients = []string{"0.0.0.0/0", "::/0"}
-	}
-
-	ipSet, err := firewall.ParseToIPSet(clients...)
+	ipSet, err := firewall.ParseToIPSet(req.Clients...)
 	if err != nil {
 		return nil, types.NewError(http.StatusBadRequest, err.Error())
 	}
