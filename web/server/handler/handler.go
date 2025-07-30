@@ -21,8 +21,6 @@ import (
 // overhead of reflection likely means that this won't be suitable for servers
 // where performance is paramount. Trading performance for API ergonomics was a
 // deliberate design decision.
-//
-//nolint:gocognit // Slightly high, but acceptable, complexity.
 func Handle[Req types.Request, Resp types.Response](
 	handlerFn func(context.Context, Req) (Resp, error),
 	p *Pipeline,
@@ -37,34 +35,7 @@ func Handle[Req types.Request, Resp types.Response](
 
 		req.SetHTTPRequest(r)
 
-		handleErr := func(err error) bool {
-			if err == nil {
-				return false
-			}
-
-			// Ensure that response handlers have a valid HTTP error and status code.
-			var (
-				terr       *types.Error
-				statusCode = http.StatusInternalServerError
-			)
-			switch {
-			case !errors.As(err, &terr) || terr == nil:
-				terr = types.NewError(statusCode, err.Error())
-			case terr.StatusCode == 0:
-				terr.StatusCode = statusCode
-			default:
-				statusCode = terr.StatusCode
-			}
-
-			terr = sanitizeError(terr, p.errorLevel)
-			if terr != nil {
-				statusCode = terr.StatusCode
-			}
-
-			resp.SetStatusCode(statusCode)
-			resp.SetError(terr)
-			return true
-		}
+		handleErr := errorHandler(resp, p.errorLevel)
 
 		// Response handling is deferred, since it should happen in both success and
 		// error scenarios.
@@ -134,4 +105,35 @@ func createInstance[T any]() T {
 
 func isNilResponse(resp types.Response) bool {
 	return resp == nil || reflect.ValueOf(resp).IsNil()
+}
+
+func errorHandler[Resp types.Response](resp Resp, errLvl types.ErrorLevel) func(error) bool {
+	return func(err error) bool {
+		if err == nil {
+			return false
+		}
+
+		// Ensure that response handlers have a valid HTTP error and status code.
+		var (
+			terr       *types.Error
+			statusCode = http.StatusInternalServerError
+		)
+		switch {
+		case !errors.As(err, &terr) || terr == nil:
+			terr = types.NewError(statusCode, err.Error())
+		case terr.StatusCode == 0:
+			terr.StatusCode = statusCode
+		default:
+			statusCode = terr.StatusCode
+		}
+
+		terr = sanitizeError(terr, errLvl)
+		if terr != nil {
+			statusCode = terr.StatusCode
+		}
+
+		resp.SetStatusCode(statusCode)
+		resp.SetError(terr)
+		return true
+	}
 }
