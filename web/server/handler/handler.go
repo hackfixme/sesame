@@ -21,6 +21,8 @@ import (
 // overhead of reflection likely means that this won't be suitable for servers
 // where performance is paramount. Trading performance for API ergonomics was a
 // deliberate design decision.
+//
+//nolint:gocognit // The complexity is a bit high, but refactoring this would hurt legibility.
 func Handle[Req types.Request, Resp types.Response](
 	handlerFn func(context.Context, Req) (Resp, error),
 	p *Pipeline,
@@ -40,10 +42,17 @@ func Handle[Req types.Request, Resp types.Response](
 		// Response handling is deferred, since it should happen in both success and
 		// error scenarios.
 		defer func() {
-			// Allow response processors to modify headers.
+			// Allow response handlers to modify headers.
 			resp.SetHeader(w.Header())
 
-			// 4. Response processing
+			// 5. Response serialization (optional)
+			if p.serializer != nil {
+				if ctx, err = p.serializer.Serialize(ctx, resp); handleErr(err) {
+					return
+				}
+			}
+
+			// 6. Response processing
 			for _, process := range p.responseProcessors {
 				ctx, err = process(ctx, resp)
 				if handleErr(err) {
@@ -51,7 +60,7 @@ func Handle[Req types.Request, Resp types.Response](
 				}
 			}
 
-			// 5. Write the response
+			// 7. Write the response
 			if err = writeResponse(ctx, w, resp); err != nil {
 				slog.Error("failed writing response", "error", err.Error())
 			}
@@ -64,14 +73,21 @@ func Handle[Req types.Request, Resp types.Response](
 			}
 		}
 
-		// 2. Request processing
+		// 2. Request deserialization (optional)
+		if p.serializer != nil {
+			if ctx, err = p.serializer.Deserialize(ctx, req); handleErr(err) {
+				return
+			}
+		}
+
+		// 3. Request processing
 		for _, process := range p.requestProcessors {
 			if ctx, err = process(ctx, req); handleErr(err) {
 				return
 			}
 		}
 
-		// 3. Run the handler
+		// 4. Run the handler
 		handlerResp, handlerErr := handlerFn(ctx, req)
 		if !isNilResponse(handlerResp) {
 			resp = handlerResp

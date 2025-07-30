@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -14,21 +13,6 @@ import (
 
 // ResponseProcessor processes outgoing responses and can modify the response or context.
 type ResponseProcessor func(ctx context.Context, resp types.Response) (context.Context, error)
-
-// MarshalJSON encodes the response as JSON and stores it in the context for writing.
-// It sets the appropriate Content-Type header.
-func MarshalJSON(ctx context.Context, resp types.Response) (context.Context, error) {
-	data, err := json.Marshal(resp)
-	if err != nil {
-		return ctx, fmt.Errorf("failed marshalling response into JSON: %w", err)
-	}
-
-	ctx = setResponseData(ctx, data)
-
-	resp.GetHeader().Set("Content-Type", "application/json")
-
-	return ctx, nil
-}
 
 // Encrypt encrypts response data using a shared key from the context.
 // If no shared key is present, it passes through without modification.

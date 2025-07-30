@@ -10,6 +10,7 @@ import (
 // It provides a fluent interface for configuring authentication and processors.
 type Pipeline struct {
 	auth               Authenticator
+	serializer         Serializer
 	requestProcessors  []RequestProcessor
 	responseProcessors []ResponseProcessor
 	errorLevel         types.ErrorLevel
@@ -36,6 +37,12 @@ func (p *Pipeline) ProcessRequest(processor ...RequestProcessor) *Pipeline {
 // ProcessResponse adds one or more response processors to the pipeline.
 func (p *Pipeline) ProcessResponse(processor ...ResponseProcessor) *Pipeline {
 	p.responseProcessors = append(p.responseProcessors, processor...)
+	return p
+}
+
+// WithSerializer sets the request and response serializer for this pipeline.
+func (p *Pipeline) WithSerializer(s Serializer) *Pipeline {
+	p.serializer = s
 	return p
 }
 
