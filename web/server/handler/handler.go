@@ -105,7 +105,7 @@ func Handle[Req types.Request, Resp types.Response](
 
 // createInstance returns a new instance of type T.
 //
-//nolint:ireturn // Required for generic functionality.
+//nolint:ireturn,nolintlint // Required for generic functionality.
 func createInstance[T any]() T {
 	var zero T
 	tType := reflect.TypeOf(zero)
