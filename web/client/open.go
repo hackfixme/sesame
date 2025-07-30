@@ -35,8 +35,11 @@ func (c *Client) Open(ctx context.Context, clients []string, serviceName string,
 		return aerrors.NewWithCause("failed marshalling request data", err, errFields...)
 	}
 
+	reqCtx, cancelReqCtx := context.WithCancel(ctx)
+	defer cancelReqCtx()
+
 	req, err := http.NewRequestWithContext(
-		ctx, http.MethodPost, url.String(), bytes.NewBuffer(reqDataJSON))
+		reqCtx, http.MethodPost, url.String(), bytes.NewBuffer(reqDataJSON))
 	if err != nil {
 		return aerrors.NewWithCause("failed creating request", err, errFields...)
 	}
