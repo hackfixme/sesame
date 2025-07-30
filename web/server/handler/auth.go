@@ -3,8 +3,8 @@ package handler
 import (
 	"context"
 	"errors"
-	"io"
 	"net/http"
+	"strings"
 
 	"github.com/mr-tron/base58"
 
@@ -50,14 +50,24 @@ func TLSAuth(appCtx *actx.Context) Authenticator {
 func InviteTokenAuth(appCtx *actx.Context) Authenticator {
 	return func(ctx context.Context, req types.Request) (context.Context, error) {
 		r := req.GetHTTPRequest()
-		// 1. Extract the nonce and HMAC from the token in the Authorization header.
-		token := r.Header.Get("Authorization")
-		nonce, hmac, err := common.DecodeToken(token)
+
+		// 1. Extract the encoded invitation token and client's X25519 public key
+		// from the Authorization header.
+		tokenEnc, clientPubKeyEnc, err := parseAuthHeader(r.Header.Get("Authorization"))
+		if err != nil {
+			return ctx, types.NewError(http.StatusUnauthorized, err.Error())
+		}
+		if tokenEnc == "" || clientPubKeyEnc == "" {
+			return ctx, types.NewError(http.StatusUnauthorized, "must provide an invite token and public key")
+		}
+
+		// 2. Decode the invitation token into an invite nonce and HMAC.
+		nonce, hmac, err := common.DecodeToken(tokenEnc)
 		if err != nil {
 			return ctx, types.NewError(http.StatusUnauthorized, "invalid invite token")
 		}
 
-		// 2. Lookup the invite in the DB using the nonce.
+		// 3. Lookup the invite in the DB using the nonce.
 		inv := &models.Invite{Nonce: nonce}
 		if err = inv.Load(appCtx.DB.NewContext(), appCtx.DB); err != nil {
 			var errNoRes dbtypes.NoResultError
@@ -67,36 +77,30 @@ func InviteTokenAuth(appCtx *actx.Context) Authenticator {
 			return ctx, types.NewError(http.StatusBadRequest, err.Error())
 		}
 
-		// 3. Read the client's X25519 public key from the request body.
-		limitedReader := io.LimitReader(r.Body, maxBodySize)
-		clientPubKeyEnc, err := io.ReadAll(limitedReader)
+		// 4. Decode the client's X25519 public key.
+		clientPubKeyData, err := base58.Decode(clientPubKeyEnc)
 		if err != nil {
 			return ctx, types.NewError(http.StatusBadRequest, err.Error())
 		}
 
-		clientPubKeyData, err := base58.Decode(string(clientPubKeyEnc))
-		if err != nil {
-			return ctx, types.NewError(http.StatusBadRequest, err.Error())
-		}
-
-		// 4. Perform ECDH key exchange to generate the shared secret key.
+		// 5. Perform ECDH key exchange to generate the shared secret key.
 		sharedKey, _, err := crypto.ECDHExchange(clientPubKeyData, inv.PrivateKey().Bytes())
 		if err != nil {
 			return ctx, types.NewError(http.StatusInternalServerError, err.Error())
 		}
 
-		// 5a. Derive a secure HMAC key from the ECDH key.
+		// 6a. Derive a secure HMAC key from the ECDH key.
 		hmacKey, err := crypto.DeriveHMACKey(sharedKey, []byte("HMAC key derivation"))
 		if err != nil {
 			return ctx, types.NewError(http.StatusInternalServerError, err.Error())
 		}
 
-		// 5b. Verify the HMAC received in the request.
+		// 6b. Verify the HMAC received in the request.
 		if !crypto.CheckHMAC(inv.Nonce, hmac, hmacKey) {
 			return ctx, types.NewError(http.StatusUnauthorized, "invalid invite token")
 		}
 
-		// 6. At this point the client is authenticated, so mark the invite as redeemed
+		// 7. At this point the client is authenticated, so mark the invite as redeemed
 		// to prevent it from being used again.
 		err = inv.Redeem(appCtx.DB.NewContext(), appCtx.DB, appCtx.TimeNow().UTC())
 		if err != nil {
@@ -111,4 +115,26 @@ func InviteTokenAuth(appCtx *actx.Context) Authenticator {
 
 		return ctx, nil
 	}
+}
+
+// parseAuthHeader parses a Bearer token from an Authorization header, optionally
+// with additional data after a semicolon delimiter.
+func parseAuthHeader(header string) (token, rest string, err error) {
+	if header == "" {
+		return "", "", errors.New("empty Authorization header")
+	}
+
+	if !strings.HasPrefix(header, "Bearer ") {
+		return "", "", errors.New("invalid Authorization header scheme")
+	}
+
+	payload := strings.TrimPrefix(header, "Bearer ")
+	parts := strings.SplitN(payload, ";", 2)
+
+	token = parts[0]
+	if len(parts) == 2 {
+		rest = parts[1]
+	}
+
+	return token, rest, nil
 }
