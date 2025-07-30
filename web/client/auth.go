@@ -27,9 +27,9 @@ import (
 // node. If the authentication is successful, it returns the TLS server (CA)
 // certificate and the TLS client certificate with its private key.
 // See the inline comments for details about the process.
-func (c *Client) Auth(ctx context.Context, token string) (ctypes.AuthResponseData, error) {
-	var cresp ctypes.AuthResponseData
-
+//
+//nolint:funlen // A bit long, but splitting it would make it less legible.
+func (c *Client) Auth(ctx context.Context, token string) (cresp ctypes.AuthResponseData, rerr error) {
 	// 1. Extract the nonce and the remote X25519 public key from the token.
 	nonce, remotePubKeyData, err := common.DecodeToken(token)
 	if err != nil {
@@ -61,28 +61,82 @@ func (c *Client) Auth(ctx context.Context, token string) (ctypes.AuthResponseDat
 	// node will generate a TLS client certificate and private key, encrypt them
 	// with the shared key, and send them in the response, along with the server
 	// (CA) certificate.
-	respBodyDec, err := c.Join(ctx, base58.Encode(authToken), base58.Encode(pubKeyData))
+	respStatusCode, respBody, errFields, err := c.join(ctx, base58.Encode(authToken), base58.Encode(pubKeyData))
 	if err != nil {
 		return cresp, err
 	}
 
-	// 5. Decrypt the response payload with the shared key.
+	var reqFailed bool
+	if respStatusCode != http.StatusOK {
+		// The request failed, but we'll still try to read the response body as it
+		// might contain a useful error message.
+		reqFailed = true
+	}
+
+	// 5. Decode the response body.
+	respBodyDec, err := base58.Decode(string(respBody))
+	if err != nil {
+		if reqFailed {
+			return cresp, aerrors.NewWith("request failed", errFields...)
+		}
+		return cresp, aerrors.NewWithCause("failed decoding response body", err, errFields...)
+	}
+
+	// Unmarshal the response and attempt to extract an error message from it.
+	unmarshalResponse := func(data []byte) (*stypes.JoinResponse, error) {
+		var rd stypes.JoinResponse
+		err = json.Unmarshal(data, &rd)
+		if err != nil {
+			return nil, err //nolint:wrapcheck // Wrapped by caller.
+		}
+		if rd.Error != nil && rd.Error.Message != "" {
+			errFields = append(errFields, "cause", rd.Error.Message)
+		}
+		return &rd, nil
+	}
+
+	// 6. Attempt decrypting the response data with the shared key.
+	// If decryption fails and the request *didn't* fail, then it's due to a
+	// protocol error, so return right away.
+	// However, if decryption fails and the request *did* fail, then attempt to
+	// unmarshal the decoded response body and extract any error messages from it
+	// anyway. This is done because the request can fail before or after
+	// authentication. If the request failed before or during authentication (e.g.
+	// because of an invalid token), then the response would be unencrypted. If it
+	// failed after authentication succeeded (e.g. during validation or
+	// request/response processing), then the response would be encrypted. In
+	// either case, if the server is configured with `--error-level=full` or
+	// `--error-level=minimal`, then the response could contain an error message
+	// that would be helpful to the user for troubleshooting purposes. This double
+	// attempt at unmarshalling is meant to extract that error message in both
+	// scenarios.
 	// TODO: Should this key be derived?
 	var sharedKeyArr [32]byte
 	copy(sharedKeyArr[:], sharedKey)
 	respBodyJSON, err := crypto.DecryptSymInMemory(respBodyDec, &sharedKeyArr)
 	if err != nil {
-		return cresp, fmt.Errorf("failed decrypting response body: %w", err)
+		if !reqFailed {
+			return cresp, fmt.Errorf("failed decrypting response body: %w", err)
+		}
+		_, _ = unmarshalResponse(respBodyDec)
+		return cresp, aerrors.NewWith("request failed", errFields...)
 	}
 
-	// 6. Unmarshal the response.
-	var resp stypes.JoinResponse
-	err = json.Unmarshal(respBodyJSON, &resp)
+	// 7. Try unmarshalling the decrypted response data this time.
+	resp, err := unmarshalResponse(respBodyJSON)
 	if err != nil {
-		return cresp, fmt.Errorf("failed unmarshalling response body: %w", err)
+		if reqFailed {
+			return cresp, aerrors.NewWith("request failed", errFields...)
+		}
+		return cresp, aerrors.NewWithCause("failed unmarshalling response body", err, errFields...)
 	}
 
-	// 7. Parse and decode the certificates.
+	// Final request failure check.
+	if reqFailed {
+		return cresp, aerrors.NewWith("request failed", errFields...)
+	}
+
+	// 8. Parse and decode the certificates.
 	tlsCACert, err := x509.ParseCertificate(resp.Data.TLSCACert)
 	if err != nil {
 		return cresp, fmt.Errorf("failed parsing TLS CA certificate: %w", err)
@@ -99,7 +153,7 @@ func (c *Client) Auth(ctx context.Context, token string) (ctypes.AuthResponseDat
 	return cresp, nil
 }
 
-// Join sends a request to the remote Sesame node to authenticate the
+// join sends a request to the remote Sesame node to authenticate the
 // local node as a client, and allow priviledged operations on the remote node,
 // such as changing firewall rules. The token is generated by the server using
 // the `invite user` command, and the pubKey is the client's X25519 public key.
@@ -108,16 +162,19 @@ func (c *Client) Auth(ctx context.Context, token string) (ctypes.AuthResponseDat
 // and return it in the response body along with the client's Ed25519 private
 // key and the server's CA certificate, encrypted with the shared ECDH key. This
 // method returns the decoded but encrypted response body.
-func (c *Client) Join(ctx context.Context, token, pubKey string) (respBodyDec []byte, rerr error) {
+func (c *Client) join(ctx context.Context, token, pubKey string) (
+	statusCode int, respBody []byte, errFields []any, rerr error,
+) {
 	url := &url.URL{Scheme: "http", Host: c.address, Path: "/api/v1/join"}
 
 	reqData := stypes.JoinRequest{}
 
-	errFields := []any{"url", url.String(), "method", http.MethodPost}
+	errFields = []any{"url", url.String(), "method", http.MethodPost}
 
 	reqDataJSON, err := json.Marshal(reqData)
 	if err != nil {
-		return nil, aerrors.NewWithCause("failed marshalling request data", err, errFields...)
+		return statusCode, respBody, errFields,
+			aerrors.NewWithCause("failed marshalling request data", err, errFields...)
 	}
 
 	reqCtx, cancelReqCtx := context.WithCancel(ctx)
@@ -126,14 +183,15 @@ func (c *Client) Join(ctx context.Context, token, pubKey string) (respBodyDec []
 	req, err := http.NewRequestWithContext(
 		reqCtx, http.MethodPost, url.String(), bytes.NewBuffer(reqDataJSON))
 	if err != nil {
-		return nil, aerrors.NewWithCause("failed creating request", err, errFields...)
+		return statusCode, respBody, errFields, fmt.Errorf("failed creating request: %w", err)
 	}
+	errFields = append(errFields, "method", req.Method)
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s;%s", token, pubKey))
 
 	resp, err := c.Do(req)
 	if err != nil {
-		return nil, aerrors.NewWithCause("failed sending request", err, errFields...)
+		return statusCode, respBody, errFields, fmt.Errorf("failed sending request: %w", err)
 	}
 	defer func() {
 		if err = resp.Body.Close(); err != nil {
@@ -142,19 +200,11 @@ func (c *Client) Join(ctx context.Context, token, pubKey string) (respBodyDec []
 	}()
 
 	errFields = append(errFields, "status_code", resp.StatusCode, "status", resp.Status)
-	if resp.StatusCode != http.StatusOK {
-		return nil, aerrors.NewWith("request failed", errFields...)
-	}
 
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err = io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, aerrors.NewWithCause("failed reading response body", err, errFields...)
+		return resp.StatusCode, respBody, errFields, fmt.Errorf("failed reading response body: %w", err)
 	}
 
-	respBodyDec, err = base58.Decode(string(respBody))
-	if err != nil {
-		return nil, aerrors.NewWithCause("failed decoding response body", err, errFields...)
-	}
-
-	return respBodyDec, nil
+	return resp.StatusCode, respBody, errFields, nil
 }

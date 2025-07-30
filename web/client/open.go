@@ -1,4 +1,4 @@
-package client
+package client //nolint:cyclop // Slightly high complexity, but within reason.
 
 import (
 	"bytes"
@@ -54,25 +54,35 @@ func (c *Client) Open(ctx context.Context, clients []string, serviceName string,
 		}
 	}()
 	errFields = append(errFields, "status_code", resp.StatusCode, "status", resp.Status)
+
+	var reqFailed bool
 	if resp.StatusCode != http.StatusOK {
-		return aerrors.NewWith("request failed", errFields...)
+		// The request failed, but we'll still try to read the response body as it
+		// might contain a useful error message.
+		reqFailed = true
 	}
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
+		if reqFailed {
+			return aerrors.NewWith("request failed", errFields...)
+		}
 		return aerrors.NewWithCause("failed reading response body", err, errFields...)
 	}
 
 	var respData stypes.OpenResponse
 	err = json.Unmarshal(respBody, &respData)
 	if err != nil {
+		if reqFailed {
+			return aerrors.NewWith("request failed", errFields...)
+		}
 		return aerrors.NewWithCause("failed unmarshalling response body", err, errFields...)
 	}
 
-	if respData.Error != nil {
-		errFields = append(errFields, "cause", respData.Error)
+	if respData.Error != nil && respData.Error.Message != "" {
+		errFields = append(errFields, "cause", respData.Error.Message)
 	}
-	if resp.StatusCode != http.StatusOK {
+	if reqFailed {
 		return aerrors.NewWith("request failed", errFields...)
 	}
 

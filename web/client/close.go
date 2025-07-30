@@ -52,22 +52,35 @@ func (c *Client) Close(ctx context.Context, clients []string, serviceName string
 		}
 	}()
 
+	var reqFailed bool
+	if resp.StatusCode != http.StatusOK {
+		// The request failed, but we'll still try to read the response body as it
+		// might contain a useful error message.
+		reqFailed = true
+	}
+
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
+		if reqFailed {
+			return aerrors.NewWith("request failed", errFields...)
+		}
 		return aerrors.NewWithCause("failed reading response body", err, errFields...)
 	}
 
 	var respData stypes.CloseResponse
 	err = json.Unmarshal(respBody, &respData)
 	if err != nil {
+		if reqFailed {
+			return aerrors.NewWith("request failed", errFields...)
+		}
 		return aerrors.NewWithCause("failed unmarshalling response body", err, errFields...)
 	}
 
 	errFields = append(errFields, "status_code", resp.StatusCode, "status", resp.Status)
-	if respData.Error != nil {
-		errFields = append(errFields, "cause", respData.Error)
+	if respData.Error != nil && respData.Error.Message != "" {
+		errFields = append(errFields, "cause", respData.Error.Message)
 	}
-	if resp.StatusCode != http.StatusOK {
+	if reqFailed {
 		return aerrors.NewWith("request failed", errFields...)
 	}
 
